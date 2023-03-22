@@ -26,42 +26,24 @@ server = shinyServer(
         
         # Si ce qu'on importe n'est pas un xlsx, il ne se passe rien
         if (substr(inFile$datapath, nchar(inFile$datapath)-4, nchar(inFile$datapath)) == ".xlsx") {
+          
           df <- openxlsx::read.xlsx(inFile$datapath,1)
-          
-          # Si une variable s'appelle ID, on garde la première qu'on laisse devant
-          # et on classe les autres par ordre alphabétique
-          # On pourrait aussi mettre un bouton qui permet de classer ou non.
-          
-          to_match <- c("ID", "IDENT", "INDIV","id", "ident","indiv")
-          match_id <- unique(grep(paste(to_match ,collapse="|"), 
-                                  colnames(df)))[1]
-
-          df <- df %>% 
-            select(all_of(match_id), order(colnames(df)))
-          
-          # On sauvegarde les noms de colonnes dans un objet
+          # On remplace les virgules par des points pour en faire des variables numeriques
+          df <- data.frame(lapply(df, function(x) {gsub(",", ".", x)}))
           nomcol_data <<- colnames(df)
-          # data() prend la valeur df
+          
           return(df)
         } else {
           return(NULL)
         }
-      }
-      
-      # Même processus pour les fichiers csv.
-      if (input$datatype == ".csv"){
+      } else if (input$datatype == ".csv"){ # Même processus pour les fichiers csv.
         if (substr(inFile$datapath, nchar(inFile$datapath)-3, nchar(inFile$datapath)) == ".csv") {
-        df <- read.csv2(inFile$datapath, header = TRUE, sep = input$separator)
-        
-        to_match <- c("ID", "IDENT", "INDIV","id", "ident","indiv")
-        match_id <- unique(grep(paste(to_match ,collapse="|"), 
-                                colnames(df)))[1]
-        
-        df <- df %>% 
-          select(all_of(match_id), order(colnames(df)))
-        
-        nomcol_data <<- colnames(df)
-        return(df)
+          
+          df <- read.csv(inFile$datapath, header = TRUE, sep = input$separator)
+          df <- data.frame(lapply(df, function(x) {gsub(",", ".", x)}))
+          nomcol_data <<- colnames(df)
+          
+          return(df)
         } else {
           return(NULL)
         }
@@ -94,15 +76,58 @@ server = shinyServer(
     # 1ère modification : quand on importe les données v$data prend la valeur des
     # des données.
     
+    
+    # L'objet contenant les données se modifie quand : 
+    # On importe les données
     observeEvent(input$target_upload, {
       v$data <<- data()
+    })
+    
+    # On change le séparateur pour les csv
+    observeEvent(input$separator, {
+      validate(need(input$target_upload, 'Importer des données'))
+      v$data <<- data()
+    })
+    
+    # On change le type de données avec un message d'erreur si ce n'est pas le bon
+    observeEvent(input$datatype, {
+      validate(need(input$target_upload, 'Importer des données'))
+      v$data <<- data()
+      if(is.null(data()) == T ){
+        
+        showModal(modalDialog(
+          title = "Attention",
+          "Le format du fichier choisi n'est pas bon, choisir un autre fichier.",
+          easyClose = TRUE,
+          footer = NULL))
+        
+      }
+    })
+    
+    
+    # Changement de l'ordre des colonnes alphabetiquement
+    observeEvent(input$col_alpha, {
+      validate(need(input$target_upload, 'Importer des données'))
+      
+      if(ncol(data()) >1 ){ # if Inutile mais fait pas de mal
+        if (input$col_alpha == TRUE) {
+          nomcol_data <<- order(colnames(data()))
+          v$data <<- data() %>%
+            select(order(colnames(data())))
+          
+        } else{
+          nomcol_data <<- colnames(data())
+          v$data <<- data()
+        }
+      }
+      
     })
     
     
     # On sauvegarde des objets réactifs qui renvoie les noms de variables.
     # Pour la base importée (= nomcol_data)
     nomcol_data_start <- reactive({
-      colnames(data())
+      nomcol_data
     })
     
     # Idem pour la base qui sera modifiée (utilisé dans les pickers)
@@ -126,7 +151,7 @@ server = shinyServer(
     })
     
     
-
+    
     
     # SUITE DU SERVER ----     
     
@@ -152,6 +177,6 @@ server = shinyServer(
     # Permet d'observer les variables dans des graphiques
     source('ServeurGraphique.R', local = TRUE)
     
-
+    
     
   })

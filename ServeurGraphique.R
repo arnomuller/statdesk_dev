@@ -39,8 +39,8 @@ output$affichage_choix_plot_type <- renderUI({
       # Choix du graphique
       selectInput(inputId="choix_plot",
                   label="Choix du type de graphique : ",
-                  choices= c("Univarié : Bâtons (effectifs)" = "barplot_eff_uni", 
-                             "Univarié : Bâtons (proportions)" = "barplot_freq_uni", 
+                  choices= c("Univarié : Cleveland (effectifs)" = "barplot_eff_uni", 
+                             "Univarié : Cleveland (proportions)" = "barplot_freq_uni", 
                              "Bivarié : Bâtons (effectifs)" = "barplot_eff_bi", 
                              "Bivarié : Bâtons (proportions)" = "barplot_freq_bi"))),
     fluidRow(
@@ -115,25 +115,12 @@ output$param_plot <- renderUI({
                     min = 10, max = 20, step = 1, value = 15)
       ),
       fluidRow(
-        sliderInput(inputId = "taille_label",
-                    label = "Taille des étiquettes",                            
-                    min = 4, max = 10, step = 1, value = 7)
-      ),
-      fluidRow(
         sliderInput(inputId = "n_break",
                     label = "Intervalle du quadrillage",                            
-                    min = 10, max = 100, step = 10, value = 20)
+                    min = 5, max = 100, step = 10, value = 20)
       ),
       fluidRow(
-        sliderInput(inputId = "width_bar",
-                    label = "Epaisseur des barres",                            
-                    min = 0.1, max = 1, step = 0.1, value = 0.5)
-      ),
-      fluidRow(
-        colourInput("col", "Couleur barres", "#076fa2",showColour = "background")
-      ),
-      fluidRow(
-        colourInput("col_label", "Couleur label", "white",showColour = "background")
+        colourInput("col", "Couleur", "#076fa2",showColour = "background")
       )
       
     )
@@ -190,9 +177,9 @@ output$param_plot <- renderUI({
                        )
       ),
       
+      # On crée autant de sélection que de modalité dans la variable 1 
       conditionalPanel(condition="input.choix_color == 'Manuel'",
                        fluidRow(
-                         # colourInput("col", NULL, "blue")
                          
                          lapply((1:length(unique(with(filter_data(), get(input$var_plot2))))), function(i){
                            col_hop <- brewer.pal(n = length(unique(with(filter_data(), get(input$var_plot2)))), name = "Blues")
@@ -265,7 +252,6 @@ plot_titre_reac <- reactive({
 # Noeud 2 : pondération
 # Noeud 3 : affichage des NA
 
-
 plot_to_save <- reactive({
   validate(need(input$target_upload, ''))
   validate(need(input$var_plot1, ''))
@@ -283,8 +269,8 @@ plot_to_save <- reactive({
           rename(Var1 = 1) %>% 
           mutate(Pct = Somme / sum(Somme)*100)%>% 
           # Prise en compte des NAs
-          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1)) %>% 
-          arrange(desc(Somme))
+          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", levels(with(filter_data(), as.factor(get(input$var_plot1)))))) %>% 
+          mutate(Var1=factor(Var1, levels=Var1))
         
         # Ordre
         ordre_moda_graph <- vector()
@@ -297,22 +283,29 @@ plot_to_save <- reactive({
         }
         
         # Graphique
-        p <- ggplot(p_uni_na) +
-          geom_col(aes(Somme, ordre_moda_graph), fill = input$col, width = input$width_bar) + # input$col input$width_bar
+        p <- ggplot(p_uni_na, aes(x=ordre_moda_graph, y=Somme)) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
           
-          scale_x_continuous(
+          scale_y_continuous(
             limits = c(0,ceiling(max(p_uni_na$Somme)/input$n_break) * input$n_break),
             breaks = seq(0, ceiling(max(p_uni_na$Somme)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
             expand = c(0, 0), # The horizontal axis does not extend to either side
-            position = "top"  # Bouger echelle
+            position = "right"  # Bouger echelle
           ) +
           
-          scale_y_discrete(expand = expansion(add = c(0, 0.5))) +
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
             # Set the color and the width of the grid lines for the horizontal axis
-            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
             # Remove tick marks by setting their length to 0
             axis.ticks.length = unit(0, "mm"),
             # Remove the title for both axes
@@ -320,26 +313,11 @@ plot_to_save <- reactive({
             # Only left line of the vertical axis is painted in black
             axis.line.y.left = element_line(color = "#202020"),
             # Remove labels from the vertical axis
-            axis.text.y = element_blank(),
+            axis.text.y = element_text( size = input$taille_axe),
             # But customize labels for the horizontal axis
             axis.text.x = element_text( size = input$taille_axe) # input$taille_axe
-          )+ 
-          geom_text( 
-            data = subset(p_uni_na, Somme < max(p_uni_na$Somme)/10),
-            aes(Somme, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col, # input$col
-            size = input$taille_label # input$taille_label
-          ) + 
-          geom_text(
-            data = subset(p_uni_na, Somme >= max(p_uni_na$Somme)/10),
-            aes(0, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col_label, # input$col_label
-            size = input$taille_label # input$taille_label
-          ) +
+          )  +
+          
           labs(
             title = plot_titre_reac(), # input$plot_titre
             subtitle = "Effectifs"
@@ -354,7 +332,6 @@ plot_to_save <- reactive({
               size = 16
             )
           )
-        
         p
         
         
@@ -366,8 +343,7 @@ plot_to_save <- reactive({
           summarise(Somme = n()) %>% 
           rename(Var1 = 1) %>% 
           filter(is.na(Var1) == FALSE) %>% 
-          mutate(Pct = Somme / sum(Somme)*100)%>% 
-          arrange(desc(Somme))
+          mutate(Pct = Somme / sum(Somme)*100) 
         
         # Ordre
         ordre_moda_graph <- vector()
@@ -380,23 +356,30 @@ plot_to_save <- reactive({
         }
         
         # Graphique
-        
-        p <- ggplot(p_uni) +
-          geom_col(aes(Somme, ordre_moda_graph), fill = input$col, width = input$width_bar) + # input$col input$width_bar
+        p <- ggplot(p_uni, aes(x=ordre_moda_graph, y=Somme)) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
           
-          scale_x_continuous(
+          scale_y_continuous(
             limits = c(0,ceiling(max(p_uni$Somme)/input$n_break) * input$n_break),
             breaks = seq(0, ceiling(max(p_uni$Somme)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
             expand = c(0, 0), # The horizontal axis does not extend to either side
-            position = "top"  # Bouger echelle
+            position = "right"  # Bouger echelle
           ) +
           
-          scale_y_discrete(expand = expansion(add = c(0, 0.5))) +
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
             # Set the color and the width of the grid lines for the horizontal axis
-            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
             # Remove tick marks by setting their length to 0
             axis.ticks.length = unit(0, "mm"),
             # Remove the title for both axes
@@ -404,26 +387,11 @@ plot_to_save <- reactive({
             # Only left line of the vertical axis is painted in black
             axis.line.y.left = element_line(color = "#202020"),
             # Remove labels from the vertical axis
-            axis.text.y = element_blank(),
+            axis.text.y = element_text( size = input$taille_axe),
             # But customize labels for the horizontal axis
             axis.text.x = element_text( size = input$taille_axe) # input$taille_axe
-          ) + 
-          geom_text(
-            data = subset(p_uni, Somme < max(p_uni$Somme)/10),
-            aes(Somme, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col, # input$col
-            size = input$taille_label # input$taille_label
-          ) + 
-          geom_text(
-            data = subset(p_uni, Somme >= max(p_uni$Somme)/10),
-            aes(0, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col_label, # input$col_label
-            size = input$taille_label # input$taille_label
-          ) +
+          )  +
+          
           labs(
             title = plot_titre_reac(), # input$plot_titre
             subtitle = "Effectifs"
@@ -437,8 +405,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) 
-        
+          )
         p
         
         
@@ -457,8 +424,8 @@ plot_to_save <- reactive({
           rename(Var1 = 1) %>% 
           mutate(Pct = Somme / sum(Somme)*100)%>% 
           # Prise en compte des NAs
-          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1)) %>% 
-          arrange(desc(Somme))
+          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", levels(with(filter_data(), as.factor(get(input$var_plot1))))))%>% 
+          mutate(Var1=factor(Var1, levels=Var1))
         
         
         # Ordre
@@ -473,22 +440,30 @@ plot_to_save <- reactive({
         
         
         # Graphique
-        p <- ggplot(p_uni_ponder_na) +
-          geom_col(aes(Somme, ordre_moda_graph), fill = input$col, width = input$width_bar) + # input$col input$width_bar
+        p <- ggplot(p_uni_ponder_na, aes(x=ordre_moda_graph, y=Somme)) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
           
-          scale_x_continuous(
+          scale_y_continuous(
             limits = c(0,ceiling(max(p_uni_ponder_na$Somme)/input$n_break) * input$n_break),
             breaks = seq(0, ceiling(max(p_uni_ponder_na$Somme)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
             expand = c(0, 0), # The horizontal axis does not extend to either side
-            position = "top"  # Bouger echelle
+            position = "right"  # Bouger echelle
           ) +
           
-          scale_y_discrete(expand = expansion(add = c(0, 0.5))) +
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
             # Set the color and the width of the grid lines for the horizontal axis
-            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
             # Remove tick marks by setting their length to 0
             axis.ticks.length = unit(0, "mm"),
             # Remove the title for both axes
@@ -496,26 +471,11 @@ plot_to_save <- reactive({
             # Only left line of the vertical axis is painted in black
             axis.line.y.left = element_line(color = "#202020"),
             # Remove labels from the vertical axis
-            axis.text.y = element_blank(),
+            axis.text.y = element_text( size = input$taille_axe),
             # But customize labels for the horizontal axis
             axis.text.x = element_text( size = input$taille_axe) # input$taille_axe
-          )+ 
-          geom_text(
-            data = subset(p_uni_ponder_na, Somme < max(p_uni_ponder_na$Somme)/10),
-            aes(Somme, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col, # input$col
-            size = input$taille_label # input$taille_label
-          ) + 
-          geom_text(
-            data = subset(p_uni_ponder_na, Somme >= max(p_uni_ponder_na$Somme)/10),
-            aes(0, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col_label, # input$col_label
-            size = input$taille_label # input$taille_label
-          ) +
+          )  +
+          
           labs(
             title = plot_titre_reac(), # input$plot_titre
             subtitle = "Effectifs pondérés"
@@ -529,7 +489,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) 
+          )
         p
         
         
@@ -542,9 +502,7 @@ plot_to_save <- reactive({
           summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder
           rename(Var1 = 1) %>% 
           filter(is.na(Var1) == FALSE) %>% 
-          mutate(Pct = Somme / sum(Somme)*100)%>% 
-          # Prise en compte des NAs
-          arrange(desc(Somme))
+          mutate(Pct = Somme / sum(Somme)*100)
         
         # Ordre
         ordre_moda_graph <- vector()
@@ -558,22 +516,30 @@ plot_to_save <- reactive({
         
         
         # Graphique
-        p <- ggplot(p_uni_ponder) +
-          geom_col(aes(Somme, ordre_moda_graph), fill = input$col, width = input$width_bar)+ # input$col input$width_bar
+        p <- ggplot(p_uni_ponder, aes(x=ordre_moda_graph, y=Somme)) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
           
-          scale_x_continuous(
+          scale_y_continuous(
             limits = c(0,ceiling(max(p_uni_ponder$Somme)/input$n_break) * input$n_break),
             breaks = seq(0, ceiling(max(p_uni_ponder$Somme)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
             expand = c(0, 0), # The horizontal axis does not extend to either side
-            position = "top"  # Bouger echelle
+            position = "right"  # Bouger echelle
           ) +
           
-          scale_y_discrete(expand = expansion(add = c(0, 0.5))) +
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
             # Set the color and the width of the grid lines for the horizontal axis
-            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
             # Remove tick marks by setting their length to 0
             axis.ticks.length = unit(0, "mm"),
             # Remove the title for both axes
@@ -581,26 +547,11 @@ plot_to_save <- reactive({
             # Only left line of the vertical axis is painted in black
             axis.line.y.left = element_line(color = "#202020"),
             # Remove labels from the vertical axis
-            axis.text.y = element_blank(),
+            axis.text.y = element_text( size = input$taille_axe),
             # But customize labels for the horizontal axis
             axis.text.x = element_text( size = input$taille_axe) # input$taille_axe
-          ) + 
-          geom_text(
-            data = subset(p_uni_ponder, Somme < max(p_uni_ponder$Somme)/10),
-            aes(Somme, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col, # input$col
-            size = input$taille_label # input$taille_label
-          ) + 
-          geom_text(
-            data = subset(p_uni_ponder, Somme >= max(p_uni_ponder$Somme)/10),
-            aes(0, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col_label, # input$col_label
-            size = input$taille_label # input$taille_label
-          ) +
+          )  +
+          
           labs(
             title = plot_titre_reac(), # input$plot_titre
             subtitle = "Effectifs pondérés"
@@ -614,7 +565,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) 
+          )
         p
         
         
@@ -633,8 +584,8 @@ plot_to_save <- reactive({
           rename(Var1 = 1) %>% 
           mutate(Pct = Somme / sum(Somme)*100)%>% 
           # Prise en compte des NAs
-          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1)) %>% 
-          arrange(desc(Somme))
+          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", levels(with(filter_data(), as.factor(get(input$var_plot1)))))) %>% 
+          mutate(Var1=factor(Var1, levels=Var1))
         
         # Ordre
         ordre_moda_graph <- vector()
@@ -647,22 +598,30 @@ plot_to_save <- reactive({
         }
         
         # Graphique
-        p <- ggplot(p_uni_na) +
-          geom_col(aes(Pct, ordre_moda_graph), fill = input$col, width = input$width_bar) + # input$col input$width_bar
+        p <- ggplot(p_uni_na, aes(x=ordre_moda_graph, y=Pct)) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
           
-          scale_x_continuous(
+          scale_y_continuous(
             limits = c(0,ceiling(max(p_uni_na$Pct)/input$n_break) * input$n_break),
             breaks = seq(0, ceiling(max(p_uni_na$Pct)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
             expand = c(0, 0), # The horizontal axis does not extend to either side
-            position = "top"  # Bouger echelle
+            position = "right"  # Bouger echelle
           ) +
           
-          scale_y_discrete(expand = expansion(add = c(0, 0.5))) +
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
             # Set the color and the width of the grid lines for the horizontal axis
-            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
             # Remove tick marks by setting their length to 0
             axis.ticks.length = unit(0, "mm"),
             # Remove the title for both axes
@@ -670,29 +629,14 @@ plot_to_save <- reactive({
             # Only left line of the vertical axis is painted in black
             axis.line.y.left = element_line(color = "#202020"),
             # Remove labels from the vertical axis
-            axis.text.y = element_blank(),
+            axis.text.y = element_text( size = input$taille_axe),
             # But customize labels for the horizontal axis
             axis.text.x = element_text( size = input$taille_axe) # input$taille_axe
-          )+ 
-          geom_text(
-            data = subset(p_uni_na, Pct < max(p_uni_na$Pct)/10),
-            aes(Pct, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col, # input$col
-            size = input$taille_label # input$taille_label
-          ) + 
-          geom_text(
-            data = subset(p_uni_na, Pct >= max(p_uni_na$Pct)/10),
-            aes(0, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col_label, # input$col_label
-            size = input$taille_label # input$taille_label
-          ) +
+          )  +
+          
           labs(
             title = plot_titre_reac(), # input$plot_titre
-            subtitle = "Proportions"
+            subtitle = "Pourcentages"
           ) + 
           theme(
             plot.title = element_text(
@@ -704,7 +648,6 @@ plot_to_save <- reactive({
               size = 16
             )
           )
-        
         p
         
         
@@ -716,8 +659,7 @@ plot_to_save <- reactive({
           summarise(Somme = n()) %>% 
           rename(Var1 = 1) %>% 
           filter(is.na(Var1) == FALSE) %>% 
-          mutate(Pct = Somme / sum(Somme)*100)%>% 
-          arrange(desc(Somme))
+          mutate(Pct = Somme / sum(Somme)*100)
         
         
         # Ordre
@@ -732,22 +674,31 @@ plot_to_save <- reactive({
         
         # Graphique
         
-        p <- ggplot(p_uni) +
-          geom_col(aes(Pct, ordre_moda_graph), fill = input$col, width = input$width_bar) + # input$col input$width_bar
+        # Graphique
+        p <- ggplot(p_uni, aes(x=ordre_moda_graph, y=Pct)) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
           
-          scale_x_continuous(
+          scale_y_continuous(
             limits = c(0,ceiling(max(p_uni$Pct)/input$n_break) * input$n_break),
             breaks = seq(0, ceiling(max(p_uni$Pct)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
             expand = c(0, 0), # The horizontal axis does not extend to either side
-            position = "top"  # Bouger echelle
+            position = "right"  # Bouger echelle
           ) +
           
-          scale_y_discrete(expand = expansion(add = c(0, 0.5))) +
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
             # Set the color and the width of the grid lines for the horizontal axis
-            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
             # Remove tick marks by setting their length to 0
             axis.ticks.length = unit(0, "mm"),
             # Remove the title for both axes
@@ -755,29 +706,14 @@ plot_to_save <- reactive({
             # Only left line of the vertical axis is painted in black
             axis.line.y.left = element_line(color = "#202020"),
             # Remove labels from the vertical axis
-            axis.text.y = element_blank(),
+            axis.text.y = element_text( size = input$taille_axe),
             # But customize labels for the horizontal axis
             axis.text.x = element_text( size = input$taille_axe) # input$taille_axe
-          ) + 
-          geom_text(
-            data = subset(p_uni, Pct < max(p_uni$Pct)/10),
-            aes(Pct, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col, # input$col
-            size = input$taille_label # input$taille_label
-          ) + 
-          geom_text(
-            data = subset(p_uni, Pct >= max(p_uni$Pct)/10),
-            aes(0, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col_label, # input$col_label
-            size = input$taille_label # input$taille_label
-          ) +
+          )  +
+          
           labs(
             title = plot_titre_reac(), # input$plot_titre
-            subtitle = "Proportions"
+            subtitle = "Pourcentages"
           ) + 
           theme(
             plot.title = element_text(
@@ -788,9 +724,9 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) 
-        
+          )
         p
+        
         
         
       }
@@ -808,8 +744,8 @@ plot_to_save <- reactive({
           rename(Var1 = 1) %>% 
           mutate(Pct = Somme / sum(Somme)*100)%>% 
           # Prise en compte des NAs
-          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1)) %>% 
-          arrange(desc(Somme))
+          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", levels(with(filter_data(), as.factor(get(input$var_plot1)))))) %>% 
+          mutate(Var1=factor(Var1, levels=Var1))
         
         # Ordre
         ordre_moda_graph <- vector()
@@ -822,22 +758,30 @@ plot_to_save <- reactive({
         }
         
         # Graphique
-        p <- ggplot(p_uni_ponder_na) +
-          geom_col(aes(Pct, ordre_moda_graph), fill = input$col, width = input$width_bar) + # input$col input$width_bar
+        p <- ggplot(p_uni_ponder_na, aes(x=ordre_moda_graph, y=Pct)) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
           
-          scale_x_continuous(
+          scale_y_continuous(
             limits = c(0,ceiling(max(p_uni_ponder_na$Pct)/input$n_break) * input$n_break),
             breaks = seq(0, ceiling(max(p_uni_ponder_na$Pct)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
             expand = c(0, 0), # The horizontal axis does not extend to either side
-            position = "top"  # Bouger echelle
+            position = "right"  # Bouger echelle
           ) +
           
-          scale_y_discrete(expand = expansion(add = c(0, 0.5))) +
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
             # Set the color and the width of the grid lines for the horizontal axis
-            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
             # Remove tick marks by setting their length to 0
             axis.ticks.length = unit(0, "mm"),
             # Remove the title for both axes
@@ -845,29 +789,14 @@ plot_to_save <- reactive({
             # Only left line of the vertical axis is painted in black
             axis.line.y.left = element_line(color = "#202020"),
             # Remove labels from the vertical axis
-            axis.text.y = element_blank(),
+            axis.text.y = element_text( size = input$taille_axe),
             # But customize labels for the horizontal axis
             axis.text.x = element_text( size = input$taille_axe) # input$taille_axe
-          )+ 
-          geom_text(
-            data = subset(p_uni_ponder_na, Pct < max(p_uni_ponder_na$Pct)/10),
-            aes(Pct, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col, # input$col
-            size = input$taille_label # input$taille_label
-          ) + 
-          geom_text(
-            data = subset(p_uni_ponder_na, Pct >= max(p_uni_ponder_na$Pct)/10),
-            aes(0, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col_label, # input$col_label
-            size = input$taille_label # input$taille_label
-          ) +
+          )  +
+          
           labs(
             title = plot_titre_reac(), # input$plot_titre
-            subtitle = "Proportions pondérées"
+            subtitle = "Pourcentages pondérés"
           ) + 
           theme(
             plot.title = element_text(
@@ -878,7 +807,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) 
+          )
         p
         
         
@@ -891,9 +820,8 @@ plot_to_save <- reactive({
           summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder
           rename(Var1 = 1) %>% 
           filter(is.na(Var1) == FALSE) %>% 
-          mutate(Pct = Somme / sum(Somme)*100)%>% 
-          # Prise en compte des NAs
-          arrange(desc(Somme))
+          mutate(Pct = Somme / sum(Somme)*100)
+        
         
         # Ordre
         ordre_moda_graph <- vector()
@@ -906,22 +834,30 @@ plot_to_save <- reactive({
         }
         
         # Graphique
-        p <- ggplot(p_uni_ponder) +
-          geom_col(aes(Pct, ordre_moda_graph), fill = input$col, width = input$width_bar)+ # input$col input$width_bar
+        p <- ggplot(p_uni_ponder, aes(x=ordre_moda_graph, y=Pct)) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
           
-          scale_x_continuous(
+          scale_y_continuous(
             limits = c(0,ceiling(max(p_uni_ponder$Pct)/input$n_break) * input$n_break),
             breaks = seq(0, ceiling(max(p_uni_ponder$Pct)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
             expand = c(0, 0), # The horizontal axis does not extend to either side
-            position = "top"  # Bouger echelle
+            position = "right"  # Bouger echelle
           ) +
           
-          scale_y_discrete(expand = expansion(add = c(0, 0.5))) +
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
             # Set the color and the width of the grid lines for the horizontal axis
-            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
             # Remove tick marks by setting their length to 0
             axis.ticks.length = unit(0, "mm"),
             # Remove the title for both axes
@@ -929,29 +865,14 @@ plot_to_save <- reactive({
             # Only left line of the vertical axis is painted in black
             axis.line.y.left = element_line(color = "#202020"),
             # Remove labels from the vertical axis
-            axis.text.y = element_blank(),
+            axis.text.y = element_text( size = input$taille_axe),
             # But customize labels for the horizontal axis
             axis.text.x = element_text( size = input$taille_axe) # input$taille_axe
-          ) + 
-          geom_text(
-            data = subset(p_uni_ponder, Pct < max(p_uni_ponder$Pct)/10),
-            aes(Pct, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col, # input$col
-            size = input$taille_label # input$taille_label
-          ) + 
-          geom_text(
-            data = subset(p_uni_ponder, Pct >= max(p_uni_ponder$Pct)/10),
-            aes(0, y = get("Var1"), label = get("Var1")),
-            hjust = 0,
-            nudge_x = 0.3,
-            colour = input$col_label, # input$col_label
-            size = input$taille_label # input$taille_label
-          ) +
+          )  +
+          
           labs(
             title = plot_titre_reac(), # input$plot_titre
-            subtitle = "Proportions pondérées"
+            subtitle = "Pourcentages pondérés"
           ) + 
           theme(
             plot.title = element_text(
@@ -962,7 +883,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) 
+          )
         p
         
         
@@ -1017,7 +938,8 @@ plot_to_save <- reactive({
           #coord_flip()+
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
             # Set the color and the width of the grid lines for the horizontal axis
             panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
             # Remove tick marks by setting their length to 0
@@ -1111,7 +1033,8 @@ plot_to_save <- reactive({
           #coord_flip()+
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
             # Set the color and the width of the grid lines for the horizontal axis
             panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
             # Remove tick marks by setting their length to 0
@@ -1211,7 +1134,8 @@ plot_to_save <- reactive({
           #coord_flip()+
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
             # Set the color and the width of the grid lines for the horizontal axis
             panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
             # Remove tick marks by setting their length to 0
@@ -1309,7 +1233,8 @@ plot_to_save <- reactive({
           #coord_flip()+
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
             # Set the color and the width of the grid lines for the horizontal axis
             panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
             # Remove tick marks by setting their length to 0
@@ -1412,7 +1337,8 @@ plot_to_save <- reactive({
           #coord_flip()+
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
             # Set the color and the width of the grid lines for the horizontal axis
             panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
             # Remove tick marks by setting their length to 0
@@ -1495,7 +1421,8 @@ plot_to_save <- reactive({
           #coord_flip()+
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),            
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
             # Set the color and the width of the grid lines for the horizontal axis
             panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
             # Remove tick marks by setting their length to 0
@@ -1584,7 +1511,8 @@ plot_to_save <- reactive({
           #coord_flip()+
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
             # Set the color and the width of the grid lines for the horizontal axis
             panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
             # Remove tick marks by setting their length to 0
@@ -1670,7 +1598,8 @@ plot_to_save <- reactive({
           #coord_flip()+
           theme(
             # Set background color to white
-            panel.background = element_rect(fill = "white"),
+            panel.background = element_rect(fill = "white"),    
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
             # Set the color and the width of the grid lines for the horizontal axis
             panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
             # Remove tick marks by setting their length to 0
@@ -1719,6 +1648,7 @@ plot_to_save <- reactive({
   
   
 })
+
 
 
 output$reactiv_plot <- renderPlot({

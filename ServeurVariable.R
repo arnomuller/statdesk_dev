@@ -6,10 +6,8 @@
 # On va pouvoir modifier des variables en les recodant ou en les réordonnant.
 
 
-
+###########################
 #### CREATION DE L'INTERFACE        ----
-
-
 ### POUR RECODER : ----
 
 # Choix de la variable à importer
@@ -281,6 +279,6 @@ observeEvent(input$ReorderOK, {
 
 
 
-
+###########################
 
 

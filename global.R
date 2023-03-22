@@ -54,18 +54,16 @@ library(shinythemes)   # Changer le theme du Shiny
 library(fresh)         # Personnaliser l'interface CSS
 
 # Import de données
-#library(xlsx)          # Pour importer et écrire des données dans d'autres formats (Excel)
-library(openxlsx)
-# Import de CSV par la suite
+library(openxlsx)     # Pour importer et écrire des données dans d'autres formats (Excel)
+                      
 
 # Manipulation de données :
 library(dplyr)         # Fonctions de manipulation de données
-library(tibble)        # Dataframe du tidyverse, on pourra l'enlever quand on fera une refonte des tables sans rownames_to_column
 library(sortable)      # Pour réordonner les modalités
+library(tidyr)         # NEW POUR TABLE PIVOT
 
 # Tables
 library(DT)            # Afficher des tables au format HTML
-library(questionr)     # Création de tables pondérées
 
 # Graphiques
 library(ggplot2)       # Graphiques du tidyverse
@@ -96,7 +94,6 @@ options(dplyr.summarise.inform = FALSE)
 
 # - Graphique interactif (library GGiraph)
 # - Sauvegarde avec rapport automatisés
-# - 
 
 
 
