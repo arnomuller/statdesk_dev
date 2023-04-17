@@ -69,7 +69,7 @@ library(DT)            # Afficher des tables au format HTML
 library(ggplot2)       # Graphiques du tidyverse
 library(colourpicker)  # Shiny : sélection manuelle des couleurs
 library(RColorBrewer)  # Création de palette de couleurs
-
+library(plotly)        # Interactif
 
 
 ### Options ----
@@ -92,9 +92,10 @@ options(dplyr.summarise.inform = FALSE)
 
 ### Idées de développement ----
 
-# - Graphique interactif (library GGiraph)
 # - Sauvegarde avec rapport automatisés
-
+# - Lecture des tables/Graphe
+# - Bouton Chi² qui affiche la significativité, et une explication
+# - Variable Quanti
 
 
 

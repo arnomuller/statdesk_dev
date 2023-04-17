@@ -39,9 +39,15 @@ server = shinyServer(
       } else if (input$datatype == ".csv"){ # Même processus pour les fichiers csv.
         if (substr(inFile$datapath, nchar(inFile$datapath)-3, nchar(inFile$datapath)) == ".csv") {
           
+          tryCatch({
+          
           df <- read.csv(inFile$datapath, header = TRUE, sep = input$separator)
           df <- data.frame(lapply(df, function(x) {gsub(",", ".", x)}))
           nomcol_data <<- colnames(df)
+          
+          }, error = function(e) {
+            return(NULL)
+          })
           
           return(df)
         } else {
@@ -73,6 +79,9 @@ server = shinyServer(
     
     v <- reactiveValues(data = NULL)
     
+    nomreac <- reactiveValues(nomcol = NULL)
+    
+    
     # 1ère modification : quand on importe les données v$data prend la valeur des
     # des données.
     
@@ -81,18 +90,22 @@ server = shinyServer(
     # On importe les données
     observeEvent(input$target_upload, {
       v$data <<- data()
+      nomreac$nomcol <<- colnames(data())
     })
     
     # On change le séparateur pour les csv
     observeEvent(input$separator, {
       validate(need(input$target_upload, 'Importer des données'))
       v$data <<- data()
+      nomreac$nomcol <<- colnames(data())
     })
     
     # On change le type de données avec un message d'erreur si ce n'est pas le bon
     observeEvent(input$datatype, {
       validate(need(input$target_upload, 'Importer des données'))
       v$data <<- data()
+      nomreac$nomcol <<- colnames(data())
+      
       if(is.null(data()) == T ){
         
         showModal(modalDialog(
@@ -109,19 +122,30 @@ server = shinyServer(
     observeEvent(input$col_alpha, {
       validate(need(input$target_upload, 'Importer des données'))
       
-      if(ncol(data()) >1 ){ # if Inutile mais fait pas de mal
+
         if (input$col_alpha == TRUE) {
-          nomcol_data <<- order(colnames(data()))
+          #nomcol_data <<- order(colnames(data()))
           v$data <<- data() %>%
             select(order(colnames(data())))
           
+          nomreac$nomcol <<- colnames(data() %>%
+                                        select(order(colnames(data()))))
+          
         } else{
-          nomcol_data <<- colnames(data())
+          #nomcol_data <<- colnames(data())
           v$data <<- data()
+          nomreac$nomcol <<- colnames(data())
         }
-      }
+
       
     })
+    
+    
+    
+   
+    
+    
+    
     
     
     # On sauvegarde des objets réactifs qui renvoie les noms de variables.
@@ -134,6 +158,8 @@ server = shinyServer(
     nomcol_data_reac <- reactive({
       colnames(v$data)
     })
+    
+    
     
     
     # Dimension de la table en entrée      

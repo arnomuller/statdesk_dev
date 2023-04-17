@@ -30,7 +30,7 @@ ui = shinyUI(
       bs_vars_wells(
         bg = "#FFF",
         border =  "#E2E2E2"
-          
+        
       ),
       # Texte des tabs
       bs_vars_global(
@@ -45,7 +45,9 @@ ui = shinyUI(
       # Police des textes
       bs_vars_font(
         size_base = "11px",
-        size_h4 = "15px"
+        size_h4 = "15px",
+        size_h5 = "14px",
+        
       )
       
     )),
@@ -174,6 +176,29 @@ ui = shinyUI(
                  conditionalPanel(condition="input.recod_or_reord == 'Recoder'",
                                   # Choix de la variable à recoder
                                   uiOutput("choix_var_recod"),
+                                  
+                                  
+                                  
+                                  tags$head(
+                                    tags$style(
+                                      HTML("
+                                      #RecodeGO {
+                                      background-color: #5E6FFF;
+                                      color: white;
+                                      border-color: #5E6FFF;
+                                      }
+                                      #RecodeGO:hover {
+                                      background-color: darkblue;
+                                      border-color: darkblue;
+                                      }
+                                           ")
+                                    )
+                                  ),
+                                  
+                                  
+                                  fluidRow(column(4, align = "center", 
+                                  actionButton("RecodeGO", "GO !", class = "btn-success"))),
+                                  
                                   br(),
                                   # Affichage d'une table de la variable
                                   fluidRow(column(12, align = "center",
@@ -186,8 +211,19 @@ ui = shinyUI(
                                   ),
                                   
                                   # Affichage de la table de la nouvelle variable
+                                  
+                                  conditionalPanel(condition = "input.var_recod == ''",
+                                                   fluidRow(column(12, align = "center",
+                                                                   textOutput("texte_table_avant"))),
+                                                   fluidRow(column(12, align = "center",
+                                                                   uiOutput("aff_table_avant2")))),
+                                  
+                                  # Affichage de la table de la nouvelle variable
+                                  conditionalPanel(condition = "input.var_recod == ''",
+                                                   fluidRow(column(12, align = "center",
+                                                                   textOutput("texte_table_apres"))),
                                   fluidRow(column(12, align = "center",
-                                                  uiOutput("aff_table_apres")))),
+                                                  uiOutput("aff_table_apres"))))),
                  
                  # Si on choisit réordonner
                  conditionalPanel(condition="input.recod_or_reord == 'Réordonner'",
@@ -281,17 +317,30 @@ ui = shinyUI(
                           uiOutput("param_plot")),
                    
                    column(10, align = "center",
+                          br(),
                           # Choix du titre
                           uiOutput("param_titre"),
                           # Affichage Graphique
                           br(),
-                          plotOutput("reactiv_plot"),
+                          plotlyOutput("reactiv_plot"),
                           br(),
                           # Sauvegarde
                           conditionalPanel(condition = "output.afficher_plot_sauvegarde == 'Oui'",
-                                           helpText("Sauvegarder le graphique :"),
+                                           
+                                           textOutput('label_sauvegarde'),
+                                           tags$head(tags$style("#label_sauvegarde{
+                                           color: #3175a8; 
+                                           font-size: 12px;
+                                           font-weight: bold ;
+                                                                }")),
+                                           # helpText("Sauvegarder le graphique :"),
                                            fluidRow(column(12,align = "center",
-                                                           downloadButton('pngsave', 
+                                                           radioButtons("save_format", "", 
+                                                                        choices = list(".png",".svg"), 
+                                                                        selected = ".png",
+                                                                        inline = T))),
+                                           fluidRow(column(12,align = "center",
+                                                           downloadButton('plot_save', 
                                                                           label = "Sauvegarde"))))
                           
                    )

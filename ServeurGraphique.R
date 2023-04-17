@@ -105,8 +105,8 @@ output$param_plot <- renderUI({
     wellPanel(
       fluidRow(
         radioButtons(inputId = "radio_ordre",
-                    label = "Ordre des modalités",
-                    choices = c("Normal","Croissant", "Décroissant"), selected="Normal",inline=F)
+                     label = "Ordre des modalités",
+                     choices = c("Normal","Croissant", "Décroissant"), selected="Normal",inline=F)
       ),
       
       fluidRow(
@@ -117,7 +117,7 @@ output$param_plot <- renderUI({
       fluidRow(
         sliderInput(inputId = "n_break",
                     label = "Intervalle du quadrillage",                            
-                    min = 5, max = 100, step = 10, value = 20)
+                    min = 5, max = 200, step = 5, value = 25)
       ),
       fluidRow(
         colourInput("col", "Couleur", "#076fa2",showColour = "background")
@@ -128,7 +128,7 @@ output$param_plot <- renderUI({
     
   } else if (input$choix_plot == "barplot_eff_bi" | input$choix_plot == "barplot_freq_bi") {
     
-    validate(need(input$var_plot2, 'Choisir une 2ème variable'))
+    validate(need(input$var_plot2, ''))
     
     wellPanel(
       fluidRow(
@@ -150,7 +150,7 @@ output$param_plot <- renderUI({
       fluidRow(
         sliderInput(inputId = "n_break",
                     label = "Intervalle du quadrillage",                            
-                    min = 10, max = 100, step = 10, value = 20)
+                    min = 5, max = 200, step = 5, value = 25)
       ),
       fluidRow(
         sliderInput(inputId = "width_bar",
@@ -183,7 +183,7 @@ output$param_plot <- renderUI({
                          
                          lapply((1:length(unique(with(filter_data(), get(input$var_plot2))))), function(i){
                            col_hop <- brewer.pal(n = length(unique(with(filter_data(), get(input$var_plot2)))), name = "Blues")
-                           colourInput(paste0("color_",i), NULL, col_hop[i],showColour = "background")
+                           colourInput(paste0("color_",i), NULL, col_hop[i],showColour = "background", allowTransparent = TRUE)
                          })
                          
                        )
@@ -200,18 +200,76 @@ output$param_plot <- renderUI({
 
 ## Choix du titre          ----
 
+output$label_titre <- renderText({ "Titre du graphique :"})
+output$label_titre_legende <- renderText({ "Titre de la légende :"})
+
+
+
 # Encadré pour l'écrire
 output$param_titre <- renderUI({ 
   validate(need(input$target_upload,''))
   conditionalPanel(condition="input.var_plot1 != ''",
                    if (input$choix_plot == "barplot_eff_uni" | input$choix_plot == "barplot_freq_uni") {
-                     textInput("plot_titre", NULL, width = "600px",
-                               placeholder = paste0("Graphique en bâton de la variable ",
-                                                    input$var_plot1))
+                     
+                     fluidRow(
+                       column(10,offset = 1,
+                              
+                                # Titre Graphique
+                                fluidRow(column(3, align = "right",
+                                                textOutput('label_titre'),
+                                                tags$head(tags$style("#label_titre{
+                                       color: #3175a8; 
+                                       font-size: 12px;
+                                       font-weight: bold ;
+                                 }"))
+                                ),
+                                column(9, align = "left",
+                                       textInput("plot_titre", NULL, width = "100%",
+                                                 placeholder = paste0("Graphique de la variable ",
+                                                                      input$var_plot1))
+                                ))
+                               
+                       ))
                    }else{
-                     textInput("plot_titre", NULL,  width = "600px",
-                               placeholder = paste0("Graphique en bâton des variables ",
-                                                    input$var_plot1, " et ", input$var_plot2 ))
+                     
+                     
+                     fluidRow(
+                       column(10,offset = 1,
+                              
+                                # Titre Graphique
+                                fluidRow(column(3, align = "right",
+                                                textOutput('label_titre'),
+                                                tags$head(tags$style("#label_titre{
+                                       color: #3175a8; 
+                                       font-size: 12px;
+                                       font-weight: bold ;
+                                 }"))
+                                ),
+                                column(9, align = "left",
+                                       textInput("plot_titre", NULL,  width = "100%",
+                                                 placeholder = paste0("Graphique empilé des variables ",
+                                                                      input$var_plot1, " et ", input$var_plot2 ))
+                                )),
+                                
+                                # Titre légende
+                                fluidRow(column(3, align = "right",
+                                                textOutput('label_titre_legende'),
+                                                tags$head(tags$style("#label_titre_legende{
+                                       color: #3175a8; 
+                                       font-size: 12px;
+                                       font-weight: bold ;
+                                 }"))
+                                ),
+                                column(4, align = "left",
+                                       textInput("plot_titre_legende", NULL, width = "100%",
+                                                 placeholder = "Pas de titre de légende")
+                                ))
+                                
+                       ))
+                     
+                     
+                     
+                    
                    }
                    
   )
@@ -239,6 +297,25 @@ plot_titre_reac <- reactive({
 })
 
 
+# Définition du titre de la légende
+plot_titre_legend_reac <- reactive({
+  
+  validate(need(input$target_upload,''))
+  validate(need(input$var_plot2, ''))
+  
+  if (input$choix_plot == "barplot_eff_bi" | input$choix_plot == "barplot_freq_bi") {
+  
+  if (input$plot_titre_legende == "") {
+      input$var_plot2 
+    } else {
+      input$plot_titre_legende
+    }
+  
+  }
+  
+})
+
+
 
 #############
 
@@ -252,6 +329,8 @@ plot_titre_reac <- reactive({
 # Noeud 2 : pondération
 # Noeud 3 : affichage des NA
 
+
+## PLOT TO SAVE              ----
 plot_to_save <- reactive({
   validate(need(input$target_upload, ''))
   validate(need(input$var_plot1, ''))
@@ -927,7 +1006,7 @@ plot_to_save <- reactive({
         
         p <- ggplot(p_bi_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
           geom_bar(position="stack", stat="identity", width = input$width_bar) +
-          scale_fill_manual(values=palette_plot())+
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
           scale_y_continuous(
             limits = c(0,ceiling(max(p_bi_na$Total)/input$n_break) * input$n_break), # input$n_break
             breaks = seq(0, ceiling(max(p_bi_na$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
@@ -986,8 +1065,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) + 
-          guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+          ) 
         
         p
         
@@ -1022,7 +1100,7 @@ plot_to_save <- reactive({
         
         p <- ggplot(p_bi, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
           geom_bar(position="stack", stat="identity", width = input$width_bar) +
-          scale_fill_manual(values=palette_plot())+
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
           scale_y_continuous(
             limits = c(0,ceiling(max(p_bi$Total)/input$n_break) * input$n_break), # input$n_break
             breaks = seq(0, ceiling(max(p_bi$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
@@ -1081,8 +1159,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) + 
-          guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+          ) 
         
         p
         
@@ -1123,7 +1200,7 @@ plot_to_save <- reactive({
         
         p <- ggplot(p_bi_ponder_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
           geom_bar(position="stack", stat="identity", width = input$width_bar) +
-          scale_fill_manual(values=palette_plot())+
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
           scale_y_continuous(
             limits = c(0,ceiling(max(p_bi_ponder_na$Total)/input$n_break) * input$n_break), # input$n_break
             breaks = seq(0, ceiling(max(p_bi_ponder_na$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
@@ -1182,8 +1259,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) + 
-          guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+          )  # input$var_plot2
         
         p
         
@@ -1222,7 +1298,7 @@ plot_to_save <- reactive({
         
         p <- ggplot(p_bi_ponder, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
           geom_bar(position="stack", stat="identity", width = input$width_bar) +
-          scale_fill_manual(values=palette_plot())+
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
           scale_y_continuous(
             limits = c(0,ceiling(max(p_bi_ponder$Total)/input$n_break) * input$n_break), # input$n_break
             breaks = seq(0, ceiling(max(p_bi_ponder$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
@@ -1281,8 +1357,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) + 
-          guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+          ) 
         
         p
         
@@ -1327,7 +1402,7 @@ plot_to_save <- reactive({
         
         p <- ggplot(p_bi_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
           geom_bar(position="fill", stat="identity", width = input$width_bar) +
-          scale_fill_manual(values=palette_plot())+
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
           scale_y_continuous(
             breaks = seq(0,1,input$n_break/100),
             expand = c(0, 0), # The horizontal axis does not extend to either side
@@ -1375,8 +1450,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) + 
-          guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+          ) 
         
         p
         
@@ -1411,7 +1485,7 @@ plot_to_save <- reactive({
         
         p <- ggplot(p_bi, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
           geom_bar(position="fill", stat="identity", width = input$width_bar) +
-          scale_fill_manual(values=palette_plot())+
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
           scale_y_continuous(
             breaks = seq(0,1,input$n_break/100),
             expand = c(0, 0), # The horizontal axis does not extend to either side
@@ -1459,8 +1533,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) + 
-          guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+          ) 
         
         p
         
@@ -1501,7 +1574,7 @@ plot_to_save <- reactive({
         
         p <- ggplot(p_bi_ponder_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
           geom_bar(position="fill", stat="identity", width = input$width_bar) +
-          scale_fill_manual(values=palette_plot())+
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
           scale_y_continuous(
             breaks = seq(0,1,input$n_break/100),
             expand = c(0, 0), # The horizontal axis does not extend to either side
@@ -1538,7 +1611,7 @@ plot_to_save <- reactive({
           coord_flip()+
           labs(
             title = plot_titre_reac(), # plot_titre_reac()
-            subtitle = "Proportions"
+            subtitle = "Proportions pondérées"
           ) + 
           theme(
             plot.title = element_text(
@@ -1549,8 +1622,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) + 
-          guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+          ) 
         
         p
         
@@ -1588,7 +1660,7 @@ plot_to_save <- reactive({
         
         p <- ggplot(p_bi_ponder, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
           geom_bar(position="fill", stat="identity", width = input$width_bar) +
-          scale_fill_manual(values=palette_plot())+
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
           scale_y_continuous(
             breaks = seq(0,1,input$n_break/100),
             expand = c(0, 0), # The horizontal axis does not extend to either side
@@ -1625,7 +1697,7 @@ plot_to_save <- reactive({
           coord_flip()+
           labs(
             title = plot_titre_reac(), # plot_titre_reac()
-            subtitle = "Proportions"
+            subtitle = "Proportions pondérées"
           ) + 
           theme(
             plot.title = element_text(
@@ -1636,8 +1708,7 @@ plot_to_save <- reactive({
               face = "italic",
               size = 16
             )
-          ) + 
-          guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+          ) 
         
         p
         
@@ -1650,10 +1721,1685 @@ plot_to_save <- reactive({
 })
 
 
+## PLOT TO SHOW              ----
 
-output$reactiv_plot <- renderPlot({
-  plot_to_save()
+
+plot_to_show <- reactive({
+  validate(need(input$target_upload, ''))
+  validate(need(input$var_plot1, ''))
+  
+  if (input$choix_plot == "barplot_eff_uni"
+  ){
+    # Pondération
+    if (input$checkbox_ponder_plot == FALSE) {
+      # AVEC NA
+      if (input$checkbox_na_plot == TRUE) {
+        
+        p_uni_na <<- filter_data() %>% 
+          group_by(get(input$var_plot1)) %>% #input$var_plot1
+          summarise(Somme = n()) %>% 
+          rename(Var1 = 1) %>% 
+          mutate(Pct = Somme / sum(Somme)*100)%>% 
+          # Prise en compte des NAs
+          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", levels(with(filter_data(), as.factor(get(input$var_plot1)))))) %>% 
+          mutate(Var1=factor(Var1, levels=Var1))
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_uni_na$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_uni_na$Var1, p_uni_na$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_uni_na$Var1, desc(p_uni_na$Somme))
+        }
+        
+        # Graphique
+        pi <- ggplot(p_uni_na, aes(x=ordre_moda_graph, y=Somme,
+                                   text = paste0(input$var_plot1," : ", Var1, "<br>", "Effectif : ", Somme))) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
+          
+          scale_y_continuous(
+            limits = c(0,ceiling(max(p_uni_na$Somme)/input$n_break) * input$n_break),
+            breaks = seq(0, ceiling(max(p_uni_na$Somme)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Bouger echelle
+          ) +
+          
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "#202020"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_text( size = input$taille_axe/2),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          )  +
+          
+          labs(
+            title = plot_titre_reac(), # input$plot_titre
+            subtitle = "Effectifs"
+          ) + 
+          theme(
+            plot.title = element_text(
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              face = "italic",
+              size = 16
+            )
+          )
+        
+        
+        ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Effectifs"), side = "top"),
+                 yaxis = list(title = ""),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        
+        
+        
+        
+      }else{ # ELSE SANS NA
+        
+        p_uni <- filter_data() %>% 
+          group_by(get(input$var_plot1)) %>% #input$var_plot1
+          summarise(Somme = n()) %>% 
+          rename(Var1 = 1) %>% 
+          filter(is.na(Var1) == FALSE) %>% 
+          mutate(Pct = Somme / sum(Somme)*100) 
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_uni$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_uni$Var1, p_uni$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_uni$Var1, desc(p_uni$Somme))
+        }
+        
+        # Graphique
+        pi <- ggplot(p_uni, aes(x=ordre_moda_graph, y=Somme,
+                                text = paste0(input$var_plot1," : ", Var1, "<br>", "Effectif : ", Somme))) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
+          
+          scale_y_continuous(
+            limits = c(0,ceiling(max(p_uni$Somme)/input$n_break) * input$n_break),
+            breaks = seq(0, ceiling(max(p_uni$Somme)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Bouger echelle
+          ) +
+          
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "#202020"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_text( size = input$taille_axe/2),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          )  +
+          
+          labs(
+            title = plot_titre_reac(), # input$plot_titre
+            subtitle = "Effectifs"
+          ) + 
+          theme(
+            plot.title = element_text(
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              face = "italic",
+              size = 16
+            )
+          )
+        
+        # Interactif
+        ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Effectifs"), side = "top"),
+                 yaxis = list(title = ""),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        
+      }
+      
+    }else{ # ELSE AVEC PONDER
+      
+      validate(need(input$var_ponder_plot, 'Choisir une variable de pondération'))
+      
+      # AVEC NA
+      if (input$checkbox_na_plot == TRUE) {
+        
+        p_uni_ponder_na <- filter_data() %>% 
+          group_by(get(input$var_plot1)) %>% #input$var_plot1
+          summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
+          rename(Var1 = 1) %>% 
+          mutate(Pct = Somme / sum(Somme)*100)%>% 
+          # Prise en compte des NAs
+          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", levels(with(filter_data(), as.factor(get(input$var_plot1))))))%>% 
+          mutate(Var1=factor(Var1, levels=Var1))
+        
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_uni_ponder_na$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_uni_ponder_na$Var1, p_uni_ponder_na$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_uni_ponder_na$Var1, desc(p_uni_ponder_na$Somme))
+        }
+        
+        
+        # Graphique
+        pi <- ggplot(p_uni_ponder_na, aes(x=ordre_moda_graph, y=Somme,
+                                          text = paste0(input$var_plot1," : ", Var1, "<br>", "Effectif : ", Somme))) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
+          
+          scale_y_continuous(
+            limits = c(0,ceiling(max(p_uni_ponder_na$Somme)/input$n_break) * input$n_break),
+            breaks = seq(0, ceiling(max(p_uni_ponder_na$Somme)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Bouger echelle
+          ) +
+          
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "#202020"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_text( size = input$taille_axe/2),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          )  +
+          
+          labs(
+            title = plot_titre_reac(), # input$plot_titre
+            subtitle = "Effectifs pondérés"
+          ) + 
+          theme(
+            plot.title = element_text(
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              face = "italic",
+              size = 16
+            )
+          )
+        
+        # Interactif
+        ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Effectifs pondérés"), side = "top"),
+                 yaxis = list(title = ""),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        
+      }else{ # ELSE SANS NA
+        
+        
+        
+        p_uni_ponder <- filter_data() %>% 
+          group_by(get(input$var_plot1)) %>% #input$var_plot1
+          summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder
+          rename(Var1 = 1) %>% 
+          filter(is.na(Var1) == FALSE) %>% 
+          mutate(Pct = Somme / sum(Somme)*100)
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_uni_ponder$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_uni_ponder$Var1, p_uni_ponder$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_uni_ponder$Var1, desc(p_uni_ponder$Somme))
+        }
+        
+        
+        # Graphique
+        pi <- ggplot(p_uni_ponder, aes(x=ordre_moda_graph, y=Somme,
+                                       text = paste0(input$var_plot1," : ", Var1, "<br>", "Effectif : ", Somme))) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
+          
+          scale_y_continuous(
+            limits = c(0,ceiling(max(p_uni_ponder$Somme)/input$n_break) * input$n_break),
+            breaks = seq(0, ceiling(max(p_uni_ponder$Somme)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Bouger echelle
+          ) +
+          
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "#202020"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_text( size = input$taille_axe/2),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          )  +
+          
+          labs(
+            title = plot_titre_reac(), # input$plot_titre
+            subtitle = "Effectifs pondérés"
+          ) + 
+          theme(
+            plot.title = element_text(
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              face = "italic",
+              size = 16
+            )
+          )
+        # Interactif
+        ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Effectifs pondérés"), side = "top"),
+                 yaxis = list(title = ""),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        
+      }
+    }
+  } else if(input$choix_plot == "barplot_freq_uni"
+  ){
+    # Pondération
+    if (input$checkbox_ponder_plot == FALSE) {
+      # AVEC NA
+      if (input$checkbox_na_plot == TRUE) {
+        
+        p_uni_na <<- filter_data() %>% 
+          group_by(get(input$var_plot1)) %>% #input$var_plot1
+          summarise(Somme = n()) %>% 
+          rename(Var1 = 1) %>% 
+          mutate(Pct = Somme / sum(Somme)*100)%>% 
+          # Prise en compte des NAs
+          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", levels(with(filter_data(), as.factor(get(input$var_plot1)))))) %>% 
+          mutate(Var1=factor(Var1, levels=Var1))
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_uni_na$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_uni_na$Var1, p_uni_na$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_uni_na$Var1, desc(p_uni_na$Somme))
+        }
+        
+        # Graphique
+        pi <- ggplot(p_uni_na, aes(x=ordre_moda_graph, y=Pct,
+                                   text = paste0(input$var_plot1," : ", Var1, "<br>", "Fréquence : ", round(Pct,2)))) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
+          
+          scale_y_continuous(
+            limits = c(0,ceiling(max(p_uni_na$Pct)/input$n_break) * input$n_break),
+            breaks = seq(0, ceiling(max(p_uni_na$Pct)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Bouger echelle
+          ) +
+          
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "#202020"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_text( size = input$taille_axe/2),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          )  +
+          
+          labs(
+            title = plot_titre_reac(), # input$plot_titre
+            subtitle = "Pourcentages"
+          ) + 
+          theme(
+            plot.title = element_text(
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              face = "italic",
+              size = 16
+            )
+          )
+        
+        # Interactif
+        ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Pourcentages"), side = "top"),
+                 yaxis = list(title = ""),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        
+        
+      }else{ # ELSE SANS NA
+        
+        p_uni <- filter_data() %>% 
+          group_by(get(input$var_plot1)) %>% #input$var_plot1
+          summarise(Somme = n()) %>% 
+          rename(Var1 = 1) %>% 
+          filter(is.na(Var1) == FALSE) %>% 
+          mutate(Pct = Somme / sum(Somme)*100)
+        
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_uni$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_uni$Var1, p_uni$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_uni$Var1, desc(p_uni$Somme))
+        }
+        
+        # Graphique
+        
+        # Graphique
+        pi <- ggplot(p_uni, aes(x=ordre_moda_graph, y=Pct,
+                                text = paste0(input$var_plot1," : ", Var1, "<br>", "Fréquence : ", round(Pct,2)))) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
+          
+          scale_y_continuous(
+            limits = c(0,ceiling(max(p_uni$Pct)/input$n_break) * input$n_break),
+            breaks = seq(0, ceiling(max(p_uni$Pct)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Bouger echelle
+          ) +
+          
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "#202020"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_text( size = input$taille_axe/2),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          )  +
+          
+          labs(
+            title = plot_titre_reac(), # input$plot_titre
+            subtitle = "Pourcentages"
+          ) + 
+          theme(
+            plot.title = element_text(
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              face = "italic",
+              size = 16
+            )
+          )
+        # Interactif
+        ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Pourcentages"), side = "top"),
+                 yaxis = list(title = ""),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        
+        
+      }
+      
+    }else{ # ELSE AVEC PONDER
+      
+      validate(need(input$var_ponder_plot, 'Choisir une variable de pondération'))
+      
+      # AVEC NA
+      if (input$checkbox_na_plot == TRUE) {
+        
+        p_uni_ponder_na <- filter_data() %>% 
+          group_by(get(input$var_plot1)) %>% #input$var_plot1
+          summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
+          rename(Var1 = 1) %>% 
+          mutate(Pct = Somme / sum(Somme)*100)%>% 
+          # Prise en compte des NAs
+          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", levels(with(filter_data(), as.factor(get(input$var_plot1)))))) %>% 
+          mutate(Var1=factor(Var1, levels=Var1))
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_uni_ponder_na$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_uni_ponder_na$Var1, p_uni_ponder_na$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_uni_ponder_na$Var1, desc(p_uni_ponder_na$Somme))
+        }
+        
+        # Graphique
+        pi <- ggplot(p_uni_ponder_na, aes(x=ordre_moda_graph, y=Pct,
+                                          text = paste0(input$var_plot1," : ", Var1, "<br>", "Fréquence : ", round(Pct,2)))) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
+          
+          scale_y_continuous(
+            limits = c(0,ceiling(max(p_uni_ponder_na$Pct)/input$n_break) * input$n_break),
+            breaks = seq(0, ceiling(max(p_uni_ponder_na$Pct)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Bouger echelle
+          ) +
+          
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "#202020"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_text( size = input$taille_axe/2),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          )  +
+          
+          labs(
+            title = plot_titre_reac(), # input$plot_titre
+            subtitle = "Pourcentages pondérés"
+          ) + 
+          theme(
+            plot.title = element_text(
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              face = "italic",
+              size = 16
+            )
+          )
+        # Interactif
+        ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Pourcentages pondérés"), side = "top"),
+                 yaxis = list(title = ""),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        
+      }else{ # ELSE SANS NA
+        
+        
+        
+        p_uni_ponder <- filter_data() %>% 
+          group_by(get(input$var_plot1)) %>% #input$var_plot1
+          summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder
+          rename(Var1 = 1) %>% 
+          filter(is.na(Var1) == FALSE) %>% 
+          mutate(Pct = Somme / sum(Somme)*100)
+        
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_uni_ponder$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_uni_ponder$Var1, p_uni_ponder$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_uni_ponder$Var1, desc(p_uni_ponder$Somme))
+        }
+        
+        # Graphique
+        pi <- ggplot(p_uni_ponder, aes(x=ordre_moda_graph, y=Pct,
+                                       text = paste0(input$var_plot1," : ", Var1, "<br>", "Fréquence : ", round(Pct,2)))) +
+          geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+          geom_point( size=4, color=input$col) +
+          coord_flip()+
+          theme_bw() +
+          xlab("") + # input$col input$width_bar
+          
+          scale_y_continuous(
+            limits = c(0,ceiling(max(p_uni_ponder$Pct)/input$n_break) * input$n_break),
+            breaks = seq(0, ceiling(max(p_uni_ponder$Pct)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Bouger echelle
+          ) +
+          
+          scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+            panel.grid.minor.x = element_blank(),
+            panel.grid.major.y = element_line(color = "white", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "#202020"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_text( size = input$taille_axe/2),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          )  +
+          
+          labs(
+            title = plot_titre_reac(), # input$plot_titre
+            subtitle = "Pourcentages pondérés"
+          ) + 
+          theme(
+            plot.title = element_text(
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              face = "italic",
+              size = 16
+            )
+          )
+        # Interactif
+        ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Pourcentages pondérés"), side = "top"),
+                 yaxis = list(title = ""),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        
+      }
+    }
+    
+    
+    
+    
+    
+  } else if(input$choix_plot == "barplot_eff_bi"
+  ){
+    validate(need(input$var_plot2, 'Choisir une 2ème variable'))
+    # Pondération
+    if (input$checkbox_ponder_plot == FALSE) {
+      # AVEC NA
+      if (input$checkbox_na_plot == TRUE) {
+        
+        p_bi_na <<- filter_data() %>% 
+          group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+          summarise(Somme = n()) %>% 
+          rename(Var1 = 1) %>% 
+          rename(Var2 = 2) %>% 
+          group_by(Var1) %>%
+          mutate(Pct = Somme / sum(Somme)*100,
+                 Total = sum(Somme))%>% 
+          # Prise en compte des NAs
+          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1),
+                 Var1 = as.factor(Var1),
+                 Var2 = as.factor(Var2))
+        
+        p_bi_na$Var2 <- factor(p_bi_na$Var2, levels = rev(levels(p_bi_na$Var2)))
+        
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_bi_na$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_bi_na$Var1, p_bi_na$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_bi_na$Var1, desc(p_bi_na$Somme))
+        }
+        
+        
+        
+        pi <- ggplot(p_bi_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                  text = paste(input$var_plot2,":", Var2, "<br>", "Effectif : ", Somme))) + 
+          geom_bar(position="stack", stat="identity", width = input$width_bar) +
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+          scale_y_continuous(
+            limits = c(0,ceiling(max(p_bi_na$Total)/input$n_break) * input$n_break), # input$n_break
+            breaks = seq(0, ceiling(max(p_bi_na$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Labels are located on the top after we pivot
+          )  +
+          # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+          #coord_flip()+
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "black"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_blank(),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          ) + 
+          
+          coord_flip()+
+          labs(
+            title = plot_titre_reac(), # plot_titre_reac()
+            subtitle = "Effectifs"
+          ) + 
+          theme(
+            plot.title = element_text(
+              #  family = "Econ Sans Cnd", 
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              #  family = "Econ Sans Cnd",
+              face = "italic",
+              size = 16
+            )
+          ) 
+        
+        
+        # Interactif
+        pi <- ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Effectifs"), side = "top"),
+                 yaxis = list(title = ""),
+                 hoverlabel = list(font = list(size = 12)),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0)) 
+        
+        # Get the y positions of each category
+        y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+        
+        # Modify the annotations list to set hjust and y position for the labels
+        pi <- layout(pi, annotations = list(
+          x = input$n_break / 4,
+          y = y_pos,
+          text = levels(ordre_moda_graph),
+          #text = unique(p_bi_na$Var1),
+          #text = levels(p_bi_na$Var1),
+          showarrow = FALSE,
+          font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+          xref = "x",
+          yref = "y",
+          xanchor = "left",
+          yanchor = "middle",
+          hjust = -0.2
+        ))
+        
+        pi
+        
+        
+        
+      }else{ # ELSE SANS NA
+        
+        p_bi <- filter_data() %>% 
+          group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+          summarise(Somme = n()) %>% 
+          rename(Var1 = 1) %>% 
+          rename(Var2 = 2) %>% 
+          filter(is.na(Var1) == FALSE) %>% 
+          filter(is.na(Var2) == FALSE) %>% 
+          group_by(Var1) %>%
+          mutate(Pct = Somme / sum(Somme)*100,
+                 Total = sum(Somme),
+                 Var1 = as.factor(Var1),
+                 Var2 = as.factor(Var2))
+        
+        p_bi$Var2 <- factor(p_bi$Var2, levels = rev(levels(p_bi$Var2)))
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_bi$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_bi$Var1, p_bi$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_bi$Var1, desc(p_bi$Somme))
+        }
+        
+        pi <- ggplot(p_bi, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                               text = paste(input$var_plot2,":", Var2, "<br>", "Effectif : ", Somme))) + 
+          geom_bar(position="stack", stat="identity", width = input$width_bar) +
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+          scale_y_continuous(
+            limits = c(0,ceiling(max(p_bi$Total)/input$n_break) * input$n_break), # input$n_break
+            breaks = seq(0, ceiling(max(p_bi$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Labels are located on the top after we pivot
+          )  +
+          # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+          #coord_flip()+
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "black"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_blank(),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          ) + 
+          coord_flip()+
+          labs(
+            title = plot_titre_reac(), # plot_titre_reac()
+            subtitle = "Effectifs"
+          ) + 
+          theme(
+            plot.title = element_text(
+              #  family = "Econ Sans Cnd", 
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              #  family = "Econ Sans Cnd",
+              face = "italic",
+              size = 16
+            )
+          ) 
+        
+        # Interactif
+        pi <- ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title =  paste0("\n","Effectifs"), side = "top"),
+                 yaxis = list(title = ""),
+                 hoverlabel = list(font = list(size = 12)),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        # Get the y positions of each category
+        y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+        
+        # Modify the annotations list to set hjust and y position for the labels
+        pi <- layout(pi, annotations = list(
+          x = input$n_break / 4,
+          y = y_pos,
+          text = levels(ordre_moda_graph),
+          #text = unique(p_bi_na$Var1),
+          #text = levels(p_bi_na$Var1),
+          showarrow = FALSE,
+          font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+          xref = "x",
+          yref = "y",
+          xanchor = "left",
+          yanchor = "middle",
+          hjust = -0.2
+        ))
+        
+        pi
+        
+        
+      }
+      
+    }else{ # ELSE AVEC PONDER
+      
+      validate(need(input$var_ponder_plot, 'Choisir une variable de pondération'))
+      
+      # AVEC NA
+      if (input$checkbox_na_plot == TRUE) {
+        
+        p_bi_ponder_na <- filter_data() %>% 
+          group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+          summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
+          rename(Var1 = 1) %>% 
+          rename(Var2 = 2) %>% 
+          group_by(Var1) %>%
+          mutate(Pct = Somme / sum(Somme)*100,
+                 Total = sum(Somme))%>% 
+          # Prise en compte des NAs
+          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1),
+                 Var1 = as.factor(Var1),
+                 Var2 = as.factor(Var2)) 
+        
+        p_bi_ponder_na$Var2 <- factor(p_bi_ponder_na$Var2, levels = rev(levels(p_bi_ponder_na$Var2)))
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_bi_ponder_na$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_bi_ponder_na$Var1, p_bi_ponder_na$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_bi_ponder_na$Var1, desc(p_bi_ponder_na$Somme))
+        }
+        
+        pi <- ggplot(p_bi_ponder_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                         text = paste(input$var_plot2,":", Var2, "<br>", "Effectif : ", Somme))) + 
+          geom_bar(position="stack", stat="identity", width = input$width_bar) +
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+          scale_y_continuous(
+            limits = c(0,ceiling(max(p_bi_ponder_na$Total)/input$n_break) * input$n_break), # input$n_break
+            breaks = seq(0, ceiling(max(p_bi_ponder_na$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Labels are located on the top after we pivot
+          )  +
+          # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+          #coord_flip()+
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "black"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_blank(),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          ) + 
+          
+          coord_flip()+
+          labs(
+            title = plot_titre_reac(), # plot_titre_reac()
+            subtitle = "Effectifs pondérés"
+          ) + 
+          theme(
+            plot.title = element_text(
+              #  family = "Econ Sans Cnd", 
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              #  family = "Econ Sans Cnd",
+              face = "italic",
+              size = 16
+            )
+          )  # input$var_plot2
+        
+        # Interactif
+        pi <- ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title =  paste0("\n","Effectifs pondérés"), side = "top"),
+                 yaxis = list(title = ""),
+                 hoverlabel = list(font = list(size = 12)),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        # Get the y positions of each category
+        y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+        
+        # Modify the annotations list to set hjust and y position for the labels
+        pi <- layout(pi, annotations = list(
+          x = input$n_break / 4,
+          y = y_pos,
+          text = levels(ordre_moda_graph),
+          #text = unique(p_bi_na$Var1),
+          #text = levels(p_bi_na$Var1),
+          showarrow = FALSE,
+          font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+          xref = "x",
+          yref = "y",
+          xanchor = "left",
+          yanchor = "middle",
+          hjust = -0.2
+        ))
+        
+        pi
+        
+        
+      }else{ # ELSE SANS NA
+        
+        
+        
+        p_bi_ponder <- filter_data() %>% 
+          group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+          summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
+          rename(Var1 = 1) %>% 
+          rename(Var2 = 2) %>% 
+          filter(is.na(Var1) == FALSE) %>% 
+          filter(is.na(Var2) == FALSE) %>% 
+          group_by(Var1) %>%
+          mutate(Pct = Somme / sum(Somme)*100,
+                 Total = sum(Somme)) %>% 
+          mutate(Var1 = as.factor(Var1),
+                 Var2 = as.factor(Var2))
+        
+        
+        p_bi_ponder$Var2 <- factor(p_bi_ponder$Var2, levels = rev(levels(p_bi_ponder$Var2)))
+        
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_bi_ponder$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_bi_ponder$Var1, p_bi_ponder$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_bi_ponder$Var1, desc(p_bi_ponder$Somme))
+        }
+        
+        
+        pi <- ggplot(p_bi_ponder, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                      text = paste(input$var_plot2,":", Var2, "<br>", "Effectif : ", Somme))) + 
+          geom_bar(position="stack", stat="identity", width = input$width_bar) +
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+          scale_y_continuous(
+            limits = c(0,ceiling(max(p_bi_ponder$Total)/input$n_break) * input$n_break), # input$n_break
+            breaks = seq(0, ceiling(max(p_bi_ponder$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Labels are located on the top after we pivot
+          )  +
+          # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+          #coord_flip()+
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "black"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_blank(),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          ) + 
+          
+          coord_flip()+
+          labs(
+            title = plot_titre_reac(), # plot_titre_reac()
+            subtitle = "Effectifs pondérés"
+          ) + 
+          theme(
+            plot.title = element_text(
+              #  family = "Econ Sans Cnd", 
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              #  family = "Econ Sans Cnd",
+              face = "italic",
+              size = 16
+            )
+          ) 
+        
+        # Interactif
+        pi <- ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Effectifs pondérés"), side = "top"),
+                 yaxis = list(title = ""),
+                 hoverlabel = list(font = list(size = 12)),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        # Get the y positions of each category
+        y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+        
+        # Modify the annotations list to set hjust and y position for the labels
+        pi <- layout(pi, annotations = list(
+          x = input$n_break / 4,
+          y = y_pos,
+          text = levels(ordre_moda_graph),
+          #text = unique(p_bi_na$Var1),
+          #text = levels(p_bi_na$Var1),
+          showarrow = FALSE,
+          font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+          xref = "x",
+          yref = "y",
+          xanchor = "left",
+          yanchor = "middle",
+          hjust = -0.2
+        ))
+        
+        pi
+        
+        
+      }
+    }
+  } else if(input$choix_plot == "barplot_freq_bi"
+  ){
+    
+    validate(need(input$var_plot2, 'Choisir une 2ème variable'))
+    
+    # Pondération
+    if (input$checkbox_ponder_plot == FALSE) {
+      # AVEC NA
+      if (input$checkbox_na_plot == TRUE) {
+        
+        p_bi_na <<- filter_data() %>% 
+          group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+          summarise(Somme = n()) %>% 
+          rename(Var1 = 1) %>% 
+          rename(Var2 = 2) %>% 
+          group_by(Var1) %>%
+          mutate(Pct = Somme / sum(Somme)*100,
+                 Total = sum(Somme))%>% 
+          # Prise en compte des NAs
+          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1),
+                 Var1 = as.factor(Var1),
+                 Var2 = as.factor(Var2))
+        
+        p_bi_na$Var2 <- factor(p_bi_na$Var2, levels = rev(levels(p_bi_na$Var2)))
+        
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_bi_na$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_bi_na$Var1, p_bi_na$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_bi_na$Var1, desc(p_bi_na$Somme))
+        }
+        
+        pi <- ggplot(p_bi_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                  text = paste(input$var_plot2,":", Var2, "<br>", "Fréquence : ", round(Pct,2)))) + 
+          geom_bar(position="fill", stat="identity", width = input$width_bar) +
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+          scale_y_continuous(
+            breaks = seq(0,1,input$n_break/100),
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Labels are located on the top
+          )  +
+          # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+          #coord_flip()+
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "black"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_blank(),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          ) + 
+          
+          coord_flip()+
+          labs(
+            title = plot_titre_reac(), # plot_titre_reac()
+            subtitle = "Proportions"
+          ) + 
+          theme(
+            plot.title = element_text(
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              face = "italic",
+              size = 16
+            )
+          ) 
+        
+        # Interactif
+        pi <- ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Pourcentages"), side = "top"),
+                 yaxis = list(title = ""),
+                 hoverlabel = list(font = list(size = 12)),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        # Get the y positions of each category
+        y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+        
+        # Modify the annotations list to set hjust and y position for the labels
+        pi <- layout(pi, annotations = list(
+          x = input$n_break / 400,
+          y = y_pos,
+          text = levels(ordre_moda_graph),
+          #text = unique(p_bi_na$Var1),
+          #text = levels(p_bi_na$Var1),
+          showarrow = FALSE,
+          font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+          xref = "x",
+          yref = "y",
+          xanchor = "left",
+          yanchor = "middle",
+          hjust = -0.2
+        ))
+        
+        pi
+        
+        
+        
+      }else{ # ELSE SANS NA
+        
+        p_bi <- filter_data() %>% 
+          group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+          summarise(Somme = n()) %>% 
+          rename(Var1 = 1) %>% 
+          rename(Var2 = 2) %>% 
+          filter(is.na(Var1) == FALSE) %>% 
+          filter(is.na(Var2) == FALSE) %>% 
+          group_by(Var1) %>%
+          mutate(Pct = Somme / sum(Somme)*100,
+                 Total = sum(Somme),
+                 Var1 = as.factor(Var1),
+                 Var2 = as.factor(Var2))
+        
+        p_bi$Var2 <- factor(p_bi$Var2, levels = rev(levels(p_bi$Var2)))
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_bi$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_bi$Var1, p_bi$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_bi$Var1, desc(p_bi$Somme))
+        }
+        
+        pi <- ggplot(p_bi, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                               text = paste(input$var_plot2,":", Var2, "<br>", "Fréquence : ", round(Pct,2)))) + 
+          geom_bar(position="fill", stat="identity", width = input$width_bar) +
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+          scale_y_continuous(
+            breaks = seq(0,1,input$n_break/100),
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Labels are located on the top
+          )  +
+          # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+          #coord_flip()+
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),            
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "black"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_blank(),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          ) + 
+          
+          coord_flip()+
+          labs(
+            title = plot_titre_reac(), # plot_titre_reac()
+            subtitle = "Proportions"
+          ) + 
+          theme(
+            plot.title = element_text(
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              face = "italic",
+              size = 16
+            )
+          ) 
+        
+        # Interactif
+        pi <- ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Pourcentages"), side = "top"),
+                 yaxis = list(title = ""),
+                 hoverlabel = list(font = list(size = 12)),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        # Get the y positions of each category
+        y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+        
+        # Modify the annotations list to set hjust and y position for the labels
+        pi <- layout(pi, annotations = list(
+          x = input$n_break / 400,
+          y = y_pos,
+          text = levels(ordre_moda_graph),
+          #text = unique(p_bi_na$Var1),
+          #text = levels(p_bi_na$Var1),
+          showarrow = FALSE,
+          font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+          xref = "x",
+          yref = "y",
+          xanchor = "left",
+          yanchor = "middle",
+          hjust = -0.2
+        ))
+        
+        pi
+        
+        
+      }
+      
+    }else{ # ELSE AVEC PONDER
+      
+      validate(need(input$var_ponder_plot, 'Choisir une variable de pondération'))
+      
+      # AVEC NA
+      if (input$checkbox_na_plot == TRUE) {
+        
+        p_bi_ponder_na <- filter_data() %>% 
+          group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+          summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
+          rename(Var1 = 1) %>% 
+          rename(Var2 = 2) %>% 
+          group_by(Var1) %>%
+          mutate(Pct = Somme / sum(Somme)*100,
+                 Total = sum(Somme))%>% 
+          # Prise en compte des NAs
+          mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1),
+                 Var1 = as.factor(Var1),
+                 Var2 = as.factor(Var2)) 
+        
+        p_bi_ponder_na$Var2 <- factor(p_bi_ponder_na$Var2, levels = rev(levels(p_bi_ponder_na$Var2)))
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_bi_ponder_na$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_bi_ponder_na$Var1, p_bi_ponder_na$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_bi_ponder_na$Var1, desc(p_bi_ponder_na$Somme))
+        }
+        
+        pi <- ggplot(p_bi_ponder_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                         text = paste(input$var_plot2,":", Var2, "<br>", "Fréquence : ", round(Pct,2)))) + 
+          geom_bar(position="fill", stat="identity", width = input$width_bar) +
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+          scale_y_continuous(
+            breaks = seq(0,1,input$n_break/100),
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Labels are located on the top
+          )  +
+          # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+          #coord_flip()+
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),             
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "black"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_blank(),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          ) + 
+          
+          coord_flip()+
+          labs(
+            title = plot_titre_reac(), # plot_titre_reac()
+            subtitle = "Proportions pondérées"
+          ) + 
+          theme(
+            plot.title = element_text(
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              face = "italic",
+              size = 16
+            )
+          ) 
+        
+        # Interactif
+        pi <- ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Pourcentages pondérés"), side = "top"),
+                 yaxis = list(title = ""),
+                 hoverlabel = list(font = list(size = 12)),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        # Get the y positions of each category
+        y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+        
+        # Modify the annotations list to set hjust and y position for the labels
+        pi <- layout(pi, annotations = list(
+          x = input$n_break / 400,
+          y = y_pos,
+          text = levels(ordre_moda_graph),
+          #text = unique(p_bi_na$Var1),
+          #text = levels(p_bi_na$Var1),
+          showarrow = FALSE,
+          font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+          xref = "x",
+          yref = "y",
+          xanchor = "left",
+          yanchor = "middle",
+          hjust = -0.2
+        ))
+        
+        pi
+        
+        
+      }else{ # ELSE SANS NA
+        
+        
+        
+        p_bi_ponder <- filter_data() %>% 
+          group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+          summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
+          rename(Var1 = 1) %>% 
+          rename(Var2 = 2) %>% 
+          filter(is.na(Var1) == FALSE) %>% 
+          filter(is.na(Var2) == FALSE) %>% 
+          group_by(Var1) %>%
+          mutate(Pct = Somme / sum(Somme)*100,
+                 Total = sum(Somme)) %>% 
+          mutate(Var1 = as.factor(Var1),
+                 Var2 = as.factor(Var2))
+        
+        
+        p_bi_ponder$Var2 <- factor(p_bi_ponder$Var2, levels = rev(levels(p_bi_ponder$Var2)))
+        
+        
+        # Ordre
+        ordre_moda_graph <- vector()
+        if (input$radio_ordre == "Normal") {
+          ordre_moda_graph <- p_bi_ponder$Var1
+        }else if (input$radio_ordre == "Croissant") {
+          ordre_moda_graph <- reorder(p_bi_ponder$Var1, p_bi_ponder$Somme)
+        }else if (input$radio_ordre == "Décroissant") {
+          ordre_moda_graph <- reorder(p_bi_ponder$Var1, desc(p_bi_ponder$Somme))
+        }
+        
+        pi <- ggplot(p_bi_ponder, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                      text = paste(input$var_plot2,":", Var2, "<br>", "Fréquence : ", round(Pct,2)))) + 
+          geom_bar(position="fill", stat="identity", width = input$width_bar) +
+          scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+          scale_y_continuous(
+            breaks = seq(0,1,input$n_break/100),
+            expand = c(0, 0), # The horizontal axis does not extend to either side
+            position = "right"  # Labels are located on the top
+          )  +
+          # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+          #coord_flip()+
+          theme(
+            # Set background color to white
+            panel.background = element_rect(fill = "white"),    
+            plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+            # Set the color and the width of the grid lines for the horizontal axis
+            panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+            # Remove tick marks by setting their length to 0
+            axis.ticks.length = unit(0, "mm"),
+            # Remove the title for both axes
+            axis.title = element_blank(),
+            # Only left line of the vertical axis is painted in black
+            axis.line.y.left = element_line(color = "black"),
+            # Remove labels from the vertical axis
+            axis.text.y = element_blank(),
+            # But customize labels for the horizontal axis
+            axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+          ) + 
+          
+          coord_flip()+
+          labs(
+            title = plot_titre_reac(), # plot_titre_reac()
+            subtitle = "Proportions pondérées"
+          ) + 
+          theme(
+            plot.title = element_text(
+              face = "bold",
+              size = 22
+            ),
+            plot.subtitle = element_text(
+              face = "italic",
+              size = 16
+            )
+          ) 
+        
+        # Interactif
+        pi <- ggplotly(pi, tooltip = c("text"))%>% 
+          config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+          layout(dragmode = "pan",
+                 title = plot_titre_reac(),
+                 xaxis = list(title = paste0("\n","Pourcentages pondérés"), side = "top"),
+                 yaxis = list(title = ""),
+                 hoverlabel = list(font = list(size = 12)),
+                 margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+        
+        # Get the y positions of each category
+        y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+        
+        # Modify the annotations list to set hjust and y position for the labels
+        pi <- layout(pi, annotations = list(
+          x = input$n_break / 400,
+          y = y_pos,
+          text = levels(ordre_moda_graph),
+          #text = unique(p_bi_na$Var1),
+          #text = levels(p_bi_na$Var1),
+          showarrow = FALSE,
+          font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+          xref = "x",
+          yref = "y",
+          xanchor = "left",
+          yanchor = "middle",
+          hjust = -0.2
+        ))
+        
+        pi
+        
+        
+      }
+    }
+  }
+  
+  
 })
+
+
+## AFFICHAGE PLOT            ----
+
+output$reactiv_plot <- renderPlotly({
+  validate(need(input$var_plot1, 'Choisir une variable'))
+  
+  if (input$choix_plot == "barplot_eff_uni" | input$choix_plot == "barplot_freq_uni") {
+    plot_to_show()
+  } else {
+    
+    validate(need(input$var_plot2, 'Choisir une deuxième variable'))
+    
+    if (input$choix_color == "Palette" &
+        length(unique(with(filter_data(), get(input$var_plot2)))) >
+        length(brewer.pal(n = length(unique(with(filter_data(), get(input$var_plot2)))), name = input$palette))) {
+      
+      message <- "ATTENTION : 
+La variable 2 a trop de modalités par rapport à la palette de couleur sélectionnée.
+    Vous pouvez sélectionner manuellement les couleurs à gauche."
+      
+      # Create a data frame with a single point
+      errordf <- data.frame(x = 0, y = 0)
+      # Create a ggplot2 plot with a single point, no axis or labels, and white background
+      errrorplot <- ggplot(errordf, aes(x, y)) +
+        geom_point(size = 0) +
+        theme(plot.background = element_rect(fill = "white", color = NA),
+              panel.background = element_rect(fill = "white", color = NA),
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              axis.title = element_blank(),
+              axis.text = element_blank(),
+              axis.ticks = element_blank(),
+              axis.line = element_blank())
+      
+      # Add text in the center of the plot
+      errrorplot <- errrorplot + 
+        annotate("text", x = 0, y = 0, label = message, color = "red", size = 4, vjust = 0.5, hjust = 0.5)
+      errrorplot
+      
+      # Convert the ggplot2 plot to a plotly object
+      errrorplot <- ggplotly(errrorplot, tooltip = "")
+      
+      # Set the opacity of the marker to 0 to make the point invisible
+      errrorplot$x$data[[1]]$marker$opacity <- 0
+      
+      # Display the interactive plot
+      errrorplot
+      
+      
+      
+      
+      # 
+      # plot.new()
+      # text(x = 0.5, y = 0.5, labels = message, col = "red")
+      # 
+      # 
+      
+    } else {
+      plot_to_show()
+    }
+    
+  }
+  
+  
+})
+
+
+
 
 
 ## CREATION PALETTE COULEUR  ----
@@ -1664,29 +3410,28 @@ palette_plot <- reactive({
   validate(need(input$target_upload, ''))
   validate(need(input$var_plot1, ''))
   validate(need(input$var_plot2, ''))
+  
+  if (input$choix_color == "Palette") {
     
-    if (input$choix_color == "Palette") {
-      
-      brewer.pal(n = length(unique(with(filter_data(), get(input$var_plot2)))), 
-                 name = input$palette)
-      
-    } else {
-      
-      hop <- input$color_1
-      for (i in c(2:length(unique(with(filter_data(), get(input$var_plot2)))))) {
-        hop <- c(hop, input[[paste0("color_",i)]])
-      }
-      return(hop)
+    brewer.pal(n = length(unique(with(filter_data(), get(input$var_plot2)))), 
+               name = input$palette)
+    
+  } else {
+    
+    hop <- input$color_1
+    for (i in c(2:length(unique(with(filter_data(), get(input$var_plot2)))))) {
+      hop <- c(hop, input[[paste0("color_",i)]])
     }
-    
+    return(hop)
+  }
+  
   
   
 })
 
 
 
-
-## CREATION LECTURE ----
+## CREATION LECTURE          ----
 
 # Pour plus tard :
 # Texte explicatif
@@ -1826,13 +3571,56 @@ palette_plot <- reactive({
 #############
 
 #############
-#### SAUVEGARDE ----
+#### Warning trop de modalités ----
+
+# # Pour la variable 1, si plus de 9 modalités
+# observeEvent(input$var_plot2, {
+#   validate(need(input$var_plot2,""))
+#   if(length(unique(with(filter_data(), get(input$var_plot2))))  >= 8 ){
+#     
+#     # showNotification("This is a notification.")
+#     showModal(modalDialog(
+#       title = "Nombre de modalités important",
+#       "En cas d'erreurs : Changer dans les options du graphiques le type de palette de couleurs en 'manuelle'.",
+#       easyClose = TRUE,
+#       footer = NULL))
+#     
+#   }
+# })
 
 
-output$pngsave <- downloadHandler(
-  filename = function() { paste("Graphique-", Sys.Date(), '.png', sep='') },
+#### SAUVEGARDE                ----
+
+
+output$label_sauvegarde <- renderText({ "Sauvegarder le graphique :"})
+
+output$plot_save <- downloadHandler(
+  filename = function() { paste("Graphique-", Sys.Date(), input$save_format, sep='')},
+  
   content = function(file) {
     png(file, width = 800)
     print(plot_to_save())
     dev.off()
+    
+    if(input$save_format == ".png") {
+      png(file, width = 800)
+      print(plot_to_save())
+      dev.off()
+    } else if (input$save_format == ".svg") {
+      svg(file)
+      print(plot_to_save())
+      dev.off()
+    }
+    
+    
+    
   })
+
+
+
+
+
+
+
+
+

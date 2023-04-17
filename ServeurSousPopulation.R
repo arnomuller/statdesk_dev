@@ -108,6 +108,9 @@ output$info_row_filter <- renderPrint({
 ### Affichage de la table filtrees       ----
 
 output$table <- renderDataTable({ 
+  validate(need(input$target_upload,""))
+  
+  tryCatch({
   
   DT::datatable(filter_data(), extensions = 'Scroller', rownames = F, options = list(deferRender = F, 
                                                                                      dom = 't',
@@ -118,6 +121,21 @@ output$table <- renderDataTable({
                                                                                      scrollX = T,
                                                                                      pageLength = 5))
   
+  }, error = function(e) {
+   
+    datatable(
+      data.frame(Erreur = c(paste("Error: ", e$message), 
+                            "Vous pouvez changer le séparateur ou le type de fichier, dans l'import du fichier",
+                            "Ne pas changer d'onglet, sinon risque de 'crash'")),
+      options = list(
+        searching = FALSE,
+        paging = FALSE,
+        info = FALSE
+      ), rownames = F
+    )
+    
+  })
+    
 })
 
 
