@@ -33,6 +33,8 @@ library(DT)            # Afficher des tables au format HTML
 library(ggplot2)       # Graphiques du tidyverse
 library(colourpicker)  # Shiny : sélection manuelle des couleurs
 library(RColorBrewer)  # Création de palette de couleurs
+library(plotly)        # Interactif
+
 
 
 shinyApp(
@@ -48,7 +50,7 @@ shinyApp(
         bs_vars_wells(
           bg = "#FFF",
           border =  "#E2E2E2"
-            
+          
         ),
         # Texte des tabs
         bs_vars_global(
@@ -63,7 +65,9 @@ shinyApp(
         # Police des textes
         bs_vars_font(
           size_base = "11px",
-          size_h4 = "15px"
+          size_h4 = "15px",
+          size_h5 = "14px",
+          
         )
         
       )),
@@ -192,20 +196,46 @@ shinyApp(
                    conditionalPanel(condition="input.recod_or_reord == 'Recoder'",
                                     # Choix de la variable à recoder
                                     uiOutput("choix_var_recod"),
+                                    # Mise en forme du bouton GO en CSS
+                                    tags$head(
+                                      tags$style(
+                                        HTML("
+                                      #RecodeGO {
+                                      background-color: #5E6FFF;
+                                      color: white;
+                                      border-color: #5E6FFF;
+                                      }
+                                      #RecodeGO:hover {
+                                      background-color: darkblue;
+                                      border-color: darkblue;
+                                      }
+                                           ")
+                                      )
+                                    ),
+                                    # Bouton pour ouvrir l'interface de recodage
+                                    fluidRow(column(4, align = "center", 
+                                                    actionButton("RecodeGO", "GO !", class = "btn-success"))),
                                     br(),
-                                    # Affichage d'une table de la variable
+                                    # Affichage d'une table de la variable à recoder
                                     fluidRow(column(12, align = "center",
                                                     tableOutput("table_recod_avant"))),
-                                    
                                     br(),
                                     # Si une variable est sélectionnée, affichage de l'interface de recodage.
                                     conditionalPanel(condition = "input.var_recod != ''",
                                                      uiOutput("recodage")
                                     ),
-                                    
+                                    # Affichage des tables de la variable recodée avant/après avec textes explicatifs
+                                    conditionalPanel(condition = "input.var_recod == ''",
+                                                     fluidRow(column(12, align = "center",
+                                                                     textOutput("texte_table_avant"))),
+                                                     fluidRow(column(12, align = "center",
+                                                                     uiOutput("aff_table_avant2")))),
                                     # Affichage de la table de la nouvelle variable
-                                    fluidRow(column(12, align = "center",
-                                                    uiOutput("aff_table_apres")))),
+                                    conditionalPanel(condition = "input.var_recod == ''",
+                                                     fluidRow(column(12, align = "center",
+                                                                     textOutput("texte_table_apres"))),
+                                                     fluidRow(column(12, align = "center",
+                                                                     uiOutput("aff_table_apres"))))),
                    
                    # Si on choisit réordonner
                    conditionalPanel(condition="input.recod_or_reord == 'Réordonner'",
@@ -297,19 +327,31 @@ shinyApp(
                      column(2,
                             br(),
                             uiOutput("param_plot")),
-                     
                      column(10, align = "center",
+                            br(),
                             # Choix du titre
                             uiOutput("param_titre"),
                             # Affichage Graphique
                             br(),
-                            plotOutput("reactiv_plot"),
+                            plotlyOutput("reactiv_plot"),
                             br(),
                             # Sauvegarde
                             conditionalPanel(condition = "output.afficher_plot_sauvegarde == 'Oui'",
-                                             helpText("Sauvegarder le graphique :"),
+                                             textOutput('label_sauvegarde'),
+                                             # Format du texte en CSS :
+                                             tags$head(tags$style("#label_sauvegarde{
+                                           color: #3175a8; 
+                                           font-size: 12px;
+                                           font-weight: bold ;
+                                                                }")),
+                                             # helpText("Sauvegarder le graphique :"),
                                              fluidRow(column(12,align = "center",
-                                                             downloadButton('pngsave', 
+                                                             radioButtons("save_format", "", 
+                                                                          choices = list(".png",".svg"), 
+                                                                          selected = ".png",
+                                                                          inline = T))),
+                                             fluidRow(column(12,align = "center",
+                                                             downloadButton('plot_save', 
                                                                             label = "Sauvegarde"))))
                             
                      )
@@ -320,6 +362,11 @@ shinyApp(
       ) # Fin mainpanel
     ) # Fin fluidpage
   ), # Fin UI
+  
+  
+  
+  
+  
   
   server = shinyServer(
     function(input, output, session) {
@@ -351,9 +398,15 @@ shinyApp(
         } else if (input$datatype == ".csv"){ # Même processus pour les fichiers csv.
           if (substr(inFile$datapath, nchar(inFile$datapath)-3, nchar(inFile$datapath)) == ".csv") {
             
-            df <- read.csv(inFile$datapath, header = TRUE, sep = input$separator)
-            df <- data.frame(lapply(df, function(x) {gsub(",", ".", x)}))
-            nomcol_data <<- colnames(df)
+            tryCatch({
+              
+              df <- read.csv(inFile$datapath, header = TRUE, sep = input$separator)
+              df <- data.frame(lapply(df, function(x) {gsub(",", ".", x)}))
+              nomcol_data <<- colnames(df)
+              
+            }, error = function(e) {
+              return(NULL)
+            })
             
             return(df)
           } else {
@@ -384,6 +437,9 @@ shinyApp(
       # unique bloc de code.
       
       v <- reactiveValues(data = NULL)
+      # Idem pour les noms de variables
+      nomreac <- reactiveValues(nomcol = NULL)
+      
       
       # 1ère modification : quand on importe les données v$data prend la valeur des
       # des données.
@@ -393,18 +449,22 @@ shinyApp(
       # On importe les données
       observeEvent(input$target_upload, {
         v$data <<- data()
+        nomreac$nomcol <<- colnames(data())
       })
       
       # On change le séparateur pour les csv
       observeEvent(input$separator, {
         validate(need(input$target_upload, 'Importer des données'))
         v$data <<- data()
+        nomreac$nomcol <<- colnames(data())
       })
       
       # On change le type de données avec un message d'erreur si ce n'est pas le bon
       observeEvent(input$datatype, {
         validate(need(input$target_upload, 'Importer des données'))
         v$data <<- data()
+        nomreac$nomcol <<- colnames(data())
+        
         if(is.null(data()) == T ){
           
           showModal(modalDialog(
@@ -421,19 +481,30 @@ shinyApp(
       observeEvent(input$col_alpha, {
         validate(need(input$target_upload, 'Importer des données'))
         
-        if(ncol(data()) >1 ){ # if Inutile mais fait pas de mal
-          if (input$col_alpha == TRUE) {
-            nomcol_data <<- order(colnames(data()))
-            v$data <<- data() %>%
-              select(order(colnames(data())))
-            
-          } else{
-            nomcol_data <<- colnames(data())
-            v$data <<- data()
-          }
+        
+        if (input$col_alpha == TRUE) {
+          #nomcol_data <<- order(colnames(data()))
+          v$data <<- data() %>%
+            select(order(colnames(data())))
+          
+          nomreac$nomcol <<- colnames(data() %>%
+                                        select(order(colnames(data()))))
+          
+        } else{
+          #nomcol_data <<- colnames(data())
+          v$data <<- data()
+          nomreac$nomcol <<- colnames(data())
         }
         
+        
       })
+      
+      
+      
+      
+      
+      
+      
       
       
       # On sauvegarde des objets réactifs qui renvoie les noms de variables.
@@ -446,6 +517,8 @@ shinyApp(
       nomcol_data_reac <- reactive({
         colnames(v$data)
       })
+      
+      
       
       
       # Dimension de la table en entrée      
@@ -465,13 +538,6 @@ shinyApp(
       
       
       
-      # SUITE DU SERVER ----     
-      
-      # Pour la suite, on continue le server dans des scripts différents pour chacun des onglets.
-      
-      
-      # 1) Variable ----  
-      # Permet de modifier les variables
       ################
       #### Onglet Recodage
       ################
@@ -489,9 +555,11 @@ shinyApp(
         
         validate(need(input$target_upload, 'Importer des données'))
         
-        fluidRow(pickerInput("var_recod", "Choix de la variable à recoder :", c("",nomcol_data_start()),
-                             multiple = F,
-                             options = list(`actions-box` = TRUE, `live-search` = TRUE, title ="Variable à recoder")))
+        pickerInput("var_recod", "Choix de la variable à recoder :", c("",nomreac$nomcol),
+                    multiple = F,
+                    options = list(`actions-box` = TRUE, `live-search` = TRUE, title ="Variable à recoder"))
+        
+        
       })
       
       # Table de cette variable
@@ -506,16 +574,44 @@ shinyApp(
       })
       
       
+      # Création d'un reactiveValues qui permet de contrôler le fait d'appuyer sur les boutons
+      # permet l'affichage et la disparition de table
+      button_state <- reactiveValues(bttn = 0, valid = FALSE)
+      
+      # Quand on clique prend valeur >= 1
+      observeEvent(input$RecodeGO, {
+        button_state$bttn <- button_state$bttn +1
+      })
+      # Quand on change de variable se reset
+      observeEvent(input$var_recod, {
+        button_state$bttn <- 0
+      })
+      # Si 0 table s'efface, si 1 table s'affiche
+      
+      # Idem pour RecodeOK
+      observeEvent(input$RecodeOK, {
+        button_state$valid <- button_state$valid +1
+      })
+      
+      
       # Cadre avec le nom de la variable à recoder
-      output$nom_var_recod_avant <- renderText(input$var_recod)
+      output$nom_var_recod_avant <- renderText({
+        validate(need(input$var_recod,''))
+        
+        if (button_state$bttn > 0) {
+          input$var_recod
+        }
+      })
+      
       
       
       # Pour chaque modalité de la variable a recoder, on créer un cadre de texte
       # avec le nom de la modalité
-      observeEvent(input$var_recod, {
-        lapply((1:length(unique(with(data(), get(var_recod_nom()))))), function(i) {
+      observeEvent(input$RecodeGO, {
+        validate(need(input$var_recod,''))
+        lapply((1:length(unique(with(v$data, get(input$var_recod))))), function(i) {
           outputId <- paste0("OUT", i)
-          output[[outputId]] <- renderText(levels(with(data(), as.factor(get(var_recod_nom()))))[i])
+          output[[outputId]] <- renderText(levels(with(v$data, as.factor(get(input$var_recod))))[i])
           
         })
       })
@@ -532,10 +628,11 @@ shinyApp(
       
       # Nouveau nom que l'on retiendra pour nommer la nouvelle variable dans la base
       var_recod_nom_apres <- reactive({
+        validate(need(input$var_recod,''))
         # Si l'utilisateur n'écrit pas un nom de variable,
         # on ajoute par defaut le suffixe _recode, sinon choix utilisateur 
         if (input$nom_var_recod_apres == "") {
-          paste0(var_recod_nom(), "_recode") # Pas utile
+          paste0(input$var_recod, "_recode") # Pas utile
         } else {
           input$nom_var_recod_apres
         }
@@ -545,59 +642,63 @@ shinyApp(
       ## CREATION DES CASES AVEC LES MODALITES
       
       # Quand on choisit une variable à recoder, ça ouvre l'interface suivante :
-      observeEvent(input$var_recod, {
+      observeEvent(input$RecodeGO, {
         output$recodage <- renderUI({
-          validate(need(input$target_upload,''))
-          validate(need(input$var_recod, 'Choisir une variable'))
-          # Par ligne :
           
-          # Titre des colonnes
-          wellPanel(style = "background: #FBFBFB",
-                    fluidRow(
-                      column(4, offset = 1,
-                             h4("Variable à recoder :")),
-                      column(4,offset = 2,
-                             h4("Nouveau nom de la variable :"))
-                    ),
-                    
-                    # les noms de variables :
-                    fluidRow(
-                      column(4, align = "center",  offset = 1,
-                             verbatimTextOutput("nom_var_recod_avant")),
-                      column(2, align = "center",
-                             icon("arrow-right", class = "fa-3x", lib = "font-awesome")),
-                      column(4,
-                             textInput("nom_var_recod_apres", NULL, placeholder = paste0(var_recod_nom(),"_recode")))
-                    ),
-                    br(),
-                    br(),
-                    
-                    # Les titres pour les modalités
-                    fluidRow(
-                      column(4,  offset = 1,
-                             h4("Modalité à recoder :")),
-                      column(4,offset = 2,
-                             h4(paste0("Nouvelles modalités de la variable :")))
-                    ),
-                    
-                    # Les cases de recodages :
-                    lapply((1:length(unique(with(data(), get(var_recod_nom()))))), function(i){
+          if (button_state$bttn > 0) {
+            validate(need(input$target_upload,''))
+            validate(need(input$var_recod, 'Choisir une variable'))
+            # Par ligne :
+            
+            # Titre des colonnes
+            wellPanel(style = "background: #FBFBFB",
+                      fluidRow(
+                        column(4, offset = 1,
+                               h4("Variable à recoder :")),
+                        column(4,offset = 2,
+                               h4("Nouveau nom de la variable :"))
+                      ),
                       
-                      inputId <- paste0("input_", i)
-                      fluidRow(column(4,  offset = 1,
-                                      verbatimTextOutput(outputId=paste0("OUT",i))),
-                               column(2, align = "center",
-                                      icon("arrow-right", class = "fa-3x", lib = "font-awesome")),
-                               column(4,
-                                      textInput(paste0("input_", i), NULL, width = 500, placeholder = levels(as.factor(with(data(), get(var_recod_nom()))))[i])))
-                      #textInput(paste0("input_", i), NULL, width = 500, placeholder = "Même modalité")))
+                      # les noms de variables :
+                      fluidRow(
+                        column(4, align = "center",  offset = 1,
+                               verbatimTextOutput("nom_var_recod_avant")),
+                        column(2, align = "center",
+                               icon("arrow-right", class = "fa-3x", lib = "font-awesome")),
+                        column(4,
+                               textInput("nom_var_recod_apres", NULL, placeholder = paste0(input$var_recod,"_recode"))) ### changement
+                      ),
+                      br(),
+                      br(),
                       
-                    }), # FIN cases
-                    
-                    # Affichage du bouton de validation
-                    fluidRow(column(4, offset = 4 , align = "center",
-                                    actionButton("RecodeOK", "Valider", class = "btn-success")))
-          ) # FIN wellpanel 
+                      # Les titres pour les modalités
+                      fluidRow(
+                        column(4,  offset = 1,
+                               h4("Modalité à recoder :")),
+                        column(4,offset = 2,
+                               h4(paste0("Nouvelles modalités de la variable :")))
+                      ),
+                      
+                      # Les cases de recodages :
+                      lapply((1:length(unique(with(v$data, get(input$var_recod))))), function(i){ # Changement
+                        
+                        inputId <- paste0("input_", i)
+                        fluidRow(column(4,  offset = 1,
+                                        verbatimTextOutput(outputId=paste0("OUT",i))),
+                                 column(2, align = "center",
+                                        icon("arrow-right", class = "fa-3x", lib = "font-awesome")),
+                                 column(4,
+                                        textInput(paste0("input_", i), NULL, width = 500, placeholder = levels(as.factor(with(v$data, get(input$var_recod))))[i]))) # Changement
+                        #textInput(paste0("input_", i), NULL, width = 500, placeholder = "Même modalité")))
+                        
+                      }), # FIN cases
+                      
+                      # Affichage du bouton de validation
+                      fluidRow(column(4, offset = 4 , align = "center",
+                                      actionButton("RecodeOK", "Valider", class = "btn-success")))
+            ) # FIN wellpanel 
+            
+          } # FIN if
         }) # FIN UI
       }) # FIN observeEvent
       
@@ -612,7 +713,7 @@ shinyApp(
         validate(need(input$target_upload, 'Importer des données'))
         # Pour le moment, on ne peut reordonner que les variables en entrée 
         # (techniquement possible avec des variables recodées, mais ça rend pas bien)
-        fluidRow(pickerInput("var_reord", "Choix de la variable à réordonner :", c("",nomcol_data_start()),
+        fluidRow(pickerInput("var_reord", "Choix de la variable à réordonner :", c("",nomreac$nomcol),
                              multiple = F,
                              options = list(`actions-box` = TRUE, `live-search` = TRUE, title ="Variable à réordonner")))
       })
@@ -641,76 +742,122 @@ shinyApp(
       #### RECODAGE                       ----
       
       
-      # Quand on appuye sur le bouton recodage
+      # Quand on appuye sur le bouton recodage GO
+      observeEvent(input$RecodeGO, {
+        validate(need(input$var_recod,''))
+        
+        # On sauvegarde le nom de la variable choisi pour l'affichage de table même
+        # quand var_recod est reset
+        var_recod <<- input$var_recod
+        
+        # On crée une autre base et une nouvelle variable basée sur l'input
+        recod_data <<- v$data  %>% 
+          mutate(newvar = as.character(get(var_recod)))
+        
+      }) # Fin var_recod 
+      
+      
+      
+      # Quand on valide le recodage
       observeEvent(input$RecodeOK, {
         
-        # On crée une nouvelle variable basée sur l'input
-        recod_data <<- v$data  %>% 
-          mutate(newvar = as.character(get(input$var_recod)))
+        # On procède au recodage
         
-        
-        # Pour chaque modalité, si l'utilisateur écrit dans l'emplacement de texte
-        # newvar prendra cette valeur.
-        
-        # Si la variable contient des NAs :
-        if (anyNA(with(recod_data, get(input$var_recod))) == T) {
-          
+        # Recodage si NA : 
+        if (anyNA(with(recod_data, get(var_recod))) == T) {
           # Pour chaque modalité de la variable (-1 pour les NA)
           # On donne la valeur dans la case recodage si l'utilisateur à écrit dedans,
           # sinon on garde la valeur précédente.
-          for (i in c(1: (length(unique(with(recod_data, as.factor(get(input$var_recod)))))-1))) {
-            recod_data <- recod_data %>% 
-              mutate(newvar = ifelse(is.na(get(input$var_recod)) == T, NA,
-                                     ifelse(get(input$var_recod) != levels(with(data(), as.factor(get(input$var_recod))))[i], newvar,
+          for (i in c(1: (length(unique(with(recod_data, as.factor(get(var_recod)))))-1))) {
+            recod_data <- recod_data %>%
+              mutate(newvar = ifelse(is.na(get(var_recod)) == T, NA,
+                                     ifelse(get(var_recod) != levels(with(recod_data, as.factor(get(var_recod))))[i], newvar,
                                             ifelse(input[[paste0("input_", i)]] != '' & input[[paste0("input_", i)]] != "NA" ,
                                                    input[[paste0("input_", i)]],
                                                    ifelse(input[[paste0("input_", i)]] == "NA", NA,
-                                                          levels(with(data(), as.factor(get(input$var_recod))))[i])))))
+                                                          levels(with(recod_data, as.factor(get(var_recod))))[i])))))
           }
           # POUR LES NAs :
-          recod_data <- recod_data %>% 
-            mutate(newvar = ifelse(is.na(get(input$var_recod)) == F, newvar,
-                                   ifelse(input[[paste0("input_", length(unique(with(data(), get(input$var_recod)))))]] != '',
-                                          input[[paste0("input_", length(unique(with(data(), get(input$var_recod)))))]], NA)))
+          recod_data <- recod_data %>%
+            mutate(newvar = ifelse(is.na(get(var_recod)) == F, newvar,
+                                   ifelse(input[[paste0("input_", length(unique(with(recod_data, get(var_recod)))))]] != '',
+                                          input[[paste0("input_", length(unique(with(recod_data, get(var_recod)))))]], NA)))
           
           
-        } else { # Si pas de NA dans la variable : 
+        } else { # Si pas de NA dans la variable :
           
-          for (i in c(1: length(unique(with(data(), get(input$var_recod)))))) {
-            recod_data[ with(recod_data, get(input$var_recod)) ==
-                          levels(with(recod_data, as.factor(get(input$var_recod))))[i],]$newvar <-  ifelse(input[[paste0("input_", i)]] != '' & input[[paste0("input_", i)]] != "NA" ,
-                                                                                                           input[[paste0("input_", i)]],
-                                                                                                           ifelse(input[[paste0("input_", i)]] == "NA", NA,
-                                                                                                                  levels(with(data(), as.factor(get(input$var_recod))))[i]))
+          for (i in c(1: length(unique(with(recod_data, get(var_recod)))))) {
+            recod_data[ with(recod_data, get(var_recod)) ==
+                          levels(with(recod_data, as.factor(get(var_recod))))[i],]$newvar <-  ifelse(input[[paste0("input_", i)]] != '' & input[[paste0("input_", i)]] != "NA" ,
+                                                                                                     input[[paste0("input_", i)]],
+                                                                                                     ifelse(input[[paste0("input_", i)]] == "NA", NA,
+                                                                                                            levels(with(recod_data, as.factor(get(var_recod))))[i]))
           } # Fin for
         } # Fin else
         
         
-        
-        # On renomme la variable newvar avec le choix du nouveau nom
-        colnames(recod_data) <- c(colnames(recod_data)[1:(ncol(recod_data)-1)], var_recod_nom_apres())
+        ## GESTION DES NOMS DE VARIABLES
+        old_name <- "newvar"
+        new_name <<- var_recod_nom_apres()
         
         # Si le nom existe déjà, la variable est automatiquement renommée avec le suffixe _new
-        if (sum(duplicated(colnames(recod_data))) > 0) {
+        if (new_name %in% names(df) && new_name != old_name) {
           showModal(modalDialog(
             title = "ATTENTION : Nom de variable existant",
-            "Ce nom de variable est déjà utilisée, la variable a été recodée avec le suffixe '_new'.",
+            "Ce nom de variable est déjà utilisée, la nouvelle variable a été recodée avec un suffixe numérique.",
             easyClose = TRUE,
             footer = NULL))
-          colnames(recod_data)[which(duplicated(colnames(recod_data)))] <- paste0(colnames(recod_data)[which(duplicated(colnames(recod_data)))],"_new")
-          
         }
         
+        # Vérification si le nouveau nom est déjà dans le dataframe
+        i <- 1
+        while (new_name %in% names(recod_data) && new_name != old_name) {
+          # Si le nom est déjà présent on ajoute un numéro à la fin du nom
+          i <- i + 1
+          new_name <- paste0(new_name, i)
+        }
+        # Renommer les variables avec le nouveau nom
+        names(recod_data)[names(recod_data) == old_name] <- new_name
+        # Sauvegarde de la base pour être sur
+        recod_data <<- recod_data
         
-        # On sauvegarde la base recodée et réécriture de l'ancienne
+        # Modification du fichier en entrée
         v$data <- recod_data
+        nomreac$nomcol <- colnames(v$data)
         
-        # On affiche une table de la variable recodée
+        
+        
+        
+        # Table de la variable selectionnee
+        # Info
+        output$texte_table_avant <- renderPrint({
+          cat("Variable à recoder: ", var_recod)
+        })
+        # Table
+        output$table_recod_avant2 <- renderTable({
+          hop <- as.data.frame(t(as.data.frame(with(v$data, addmargins(table(get(var_recod), useNA = "always")))))) %>% 
+            slice(2)
+          colnames(hop) <- c(with(v$data, names(table(get(var_recod)))), "Non Réponse", "Total")
+          hop
+        })
+        # Affichage de la table avant recod
+        output$aff_table_avant2 <- renderUI({
+          tableOutput("table_recod_avant2")
+        })
+        
+        
+        
+        # Table de la variable nouvelle
+        # Info 
+        output$texte_table_apres <- renderPrint({
+          cat("Nouvelle variable: ", new_name)
+        })
+        # Table
         output$table_recod_apres <- renderTable({
-          tab <- as.data.frame(t(as.data.frame(with(recod_data, addmargins(table(get(var_recod_nom_apres()), useNA = "always")))))) %>%
+          tab <- as.data.frame(t(as.data.frame(with(v$data, addmargins(table(get(new_name), useNA = "always")))))) %>%
             slice(2)
           
-          colnames(tab) <- c(with(recod_data, names(table(get(var_recod_nom_apres())))), "Non Réponse", "Total")
+          colnames(tab) <- c(with(v$data, names(table(get(new_name)))), "Non Réponse", "Total")
           tab
         })
         # Affichage de la table recodée
@@ -718,8 +865,13 @@ shinyApp(
           tableOutput("table_recod_apres")
         })
         
-        
-      }) # Fin Recodage 
+      })
+      
+      
+      
+      
+      
+      
       
       
       #### REORDONNER                     ----
@@ -727,22 +879,20 @@ shinyApp(
       # Quand on appuie sur le bouton :
       observeEvent(input$ReorderOK, {
         
-        # On sauvegarde le nouvelle ordre des modalités
-        # (pas forcément utile)
+        validate(need(input$var_reord, ''))
+        
+        # On sauvegarde le nouvelle ordre des modalités (pas forcément utile)
         new_order <<- input$rank_list_basic
         
-        # Pas forcément utile
-        reord_data <- v$data
-        # Changement de l'ordre de la variable
-        reord_data[,input$var_reord] <- with(reord_data, factor(get(input$var_reord), levels = input$rank_list_basic))
-        # Sauvegarde de la nouvelle base et réécriture de l'ancienne
-        v$data <- reord_data
+        # On change l'ordre directement dans le fichier en entrée
+        v$data[,input$var_reord] <- with(v$data, factor(get(input$var_reord), levels = input$rank_list_basic))
+        
         
         # On affiche une table de la variable réordonnée
         output$table_reord_apres <- renderTable({
-          tab_reord <- as.data.frame(t(as.data.frame(with(reord_data, addmargins(table(get(input$var_reord), useNA = "always")))))) %>% 
+          tab_reord <- as.data.frame(t(as.data.frame(with(v$data, addmargins(table(get(input$var_reord), useNA = "always")))))) %>% 
             slice(2)
-          colnames(tab_reord) <- c(with(reord_data, names(table(get(input$var_reord)))), "Non Réponse", "Total")
+          colnames(tab_reord) <- c(with(v$data, names(table(get(input$var_reord)))), "Non Réponse", "Total")
           tab_reord
         })
         output$aff_table_apres_reord <- renderUI({
@@ -758,8 +908,6 @@ shinyApp(
       
       
       
-      # 2) Sous Population ----  
-      # Permet de faire une sous-population
       ##################
       #### Onglet sous-population ----
       ##################
@@ -869,15 +1017,33 @@ shinyApp(
       ### Affichage de la table filtrees       ----
       
       output$table <- renderDataTable({ 
+        validate(need(input$target_upload,""))
         
-        DT::datatable(filter_data(), extensions = 'Scroller', rownames = F, options = list(deferRender = F, 
-                                                                                           dom = 't',
-                                                                                           # columnDefs = list(list(className = 'dt-center',
-                                                                                           #                        targets = 5)),
-                                                                                           scrollY = 500,  #Hauteur de la table en pixel
-                                                                                           scroller = TRUE, 
-                                                                                           scrollX = T,
-                                                                                           pageLength = 5))
+        tryCatch({
+          
+          DT::datatable(filter_data(), extensions = 'Scroller', rownames = F, options = list(deferRender = F, 
+                                                                                             dom = 't',
+                                                                                             # columnDefs = list(list(className = 'dt-center',
+                                                                                             #                        targets = 5)),
+                                                                                             scrollY = 500,  #Hauteur de la table en pixel
+                                                                                             scroller = TRUE, 
+                                                                                             scrollX = T,
+                                                                                             pageLength = 5))
+          
+        }, error = function(e) {
+          
+          datatable(
+            data.frame(Erreur = c(paste("Error: ", e$message), 
+                                  "Vous pouvez changer le séparateur ou le type de fichier, dans l'import du fichier",
+                                  "Ne pas changer d'onglet, sinon risque de 'crash'")),
+            options = list(
+              searching = FALSE,
+              paging = FALSE,
+              info = FALSE
+            ), rownames = F
+          )
+          
+        })
         
       })
       
@@ -904,8 +1070,6 @@ shinyApp(
       
       
       
-      # 3) Table ----  
-      # Permet d'observer les variables dans des tables
       ###########
       #### Onglet Tables
       ###########
@@ -2114,7 +2278,6 @@ shinyApp(
         validate(need(input$var_table2,""))
         if(dim(with(filter_data(), table(get(input$var_table2))))  >= 9 ){
           
-          #showNotification("This is a notification. 22222")
           showModal(modalDialog(
             title = "Nombre de modalités trop important",
             "La variable que vous avez sélectionné a trop de modalité pour être observée correctement dans une table. \n Vous pouvez la recoder dans l'onglet 'Variables'",
@@ -2128,9 +2291,8 @@ shinyApp(
       # Pour la variable 3, si plus de 5 modalités
       observeEvent(input$var_table3, {
         validate(need(input$var_table3,""))
-        if(dim(with(filter_data(), table(get(input$var_table3))))  >= 5 ){
+        if(dim(with(filter_data(), table(get(input$var_table3))))  >= 9 ){
           
-          #showNotification("This is a notification. 22222")
           showModal(modalDialog(
             title = "Nombre de modalités trop important",
             "La variable que vous avez sélectionné a trop de modalité pour être observée correctement dans une table. \n Vous pouvez la recoder dans l'onglet 'Variables'",
@@ -2156,8 +2318,6 @@ shinyApp(
       
       
       
-      # 4) Graphique ----  
-      # Permet d'observer les variables dans des graphiques
       ###################
       #### Serveur Graphique
       ###################
@@ -2277,7 +2437,7 @@ shinyApp(
             fluidRow(
               sliderInput(inputId = "n_break",
                           label = "Intervalle du quadrillage",                            
-                          min = 5, max = 100, step = 10, value = 20)
+                          min = 5, max = 200, step = 5, value = 25)
             ),
             fluidRow(
               colourInput("col", "Couleur", "#076fa2",showColour = "background")
@@ -2288,7 +2448,7 @@ shinyApp(
           
         } else if (input$choix_plot == "barplot_eff_bi" | input$choix_plot == "barplot_freq_bi") {
           
-          validate(need(input$var_plot2, 'Choisir une 2ème variable'))
+          validate(need(input$var_plot2, ''))
           
           wellPanel(
             fluidRow(
@@ -2310,7 +2470,7 @@ shinyApp(
             fluidRow(
               sliderInput(inputId = "n_break",
                           label = "Intervalle du quadrillage",                            
-                          min = 10, max = 100, step = 10, value = 20)
+                          min = 5, max = 200, step = 5, value = 25)
             ),
             fluidRow(
               sliderInput(inputId = "width_bar",
@@ -2343,7 +2503,7 @@ shinyApp(
                                
                                lapply((1:length(unique(with(filter_data(), get(input$var_plot2))))), function(i){
                                  col_hop <- brewer.pal(n = length(unique(with(filter_data(), get(input$var_plot2)))), name = "Blues")
-                                 colourInput(paste0("color_",i), NULL, col_hop[i],showColour = "background")
+                                 colourInput(paste0("color_",i), NULL, col_hop[i],showColour = "background", allowTransparent = TRUE)
                                })
                                
                              )
@@ -2358,20 +2518,78 @@ shinyApp(
       
       
       
-      ## Choix du titre          ----
+      ## Choix des titres        ----
+      
+      output$label_titre <- renderText({ "Titre du graphique :"})
+      output$label_titre_legende <- renderText({ "Titre de la légende :"})
+      
+      
       
       # Encadré pour l'écrire
       output$param_titre <- renderUI({ 
         validate(need(input$target_upload,''))
         conditionalPanel(condition="input.var_plot1 != ''",
                          if (input$choix_plot == "barplot_eff_uni" | input$choix_plot == "barplot_freq_uni") {
-                           textInput("plot_titre", NULL, width = "600px",
-                                     placeholder = paste0("Graphique en bâton de la variable ",
-                                                          input$var_plot1))
+                           
+                           fluidRow(
+                             column(10,offset = 1,
+                                    
+                                    # Titre Graphique
+                                    fluidRow(column(3, align = "right",
+                                                    textOutput('label_titre'),
+                                                    tags$head(tags$style("#label_titre{
+                                       color: #3175a8; 
+                                       font-size: 12px;
+                                       font-weight: bold ;
+                                 }"))
+                                    ),
+                                    column(9, align = "left",
+                                           textInput("plot_titre", NULL, width = "100%",
+                                                     placeholder = paste0("Graphique de la variable ",
+                                                                          input$var_plot1))
+                                    ))
+                                    
+                             ))
                          }else{
-                           textInput("plot_titre", NULL,  width = "600px",
-                                     placeholder = paste0("Graphique en bâton des variables ",
-                                                          input$var_plot1, " et ", input$var_plot2 ))
+                           
+                           
+                           fluidRow(
+                             column(10,offset = 1,
+                                    
+                                    # Titre Graphique
+                                    fluidRow(column(3, align = "right",
+                                                    textOutput('label_titre'),
+                                                    tags$head(tags$style("#label_titre{
+                                       color: #3175a8; 
+                                       font-size: 12px;
+                                       font-weight: bold ;
+                                 }"))
+                                    ),
+                                    column(9, align = "left",
+                                           textInput("plot_titre", NULL,  width = "100%",
+                                                     placeholder = paste0("Graphique empilé des variables ",
+                                                                          input$var_plot1, " et ", input$var_plot2 ))
+                                    )),
+                                    
+                                    # Titre légende
+                                    fluidRow(column(3, align = "right",
+                                                    textOutput('label_titre_legende'),
+                                                    tags$head(tags$style("#label_titre_legende{
+                                       color: #3175a8; 
+                                       font-size: 12px;
+                                       font-weight: bold ;
+                                 }"))
+                                    ),
+                                    column(4, align = "left",
+                                           textInput("plot_titre_legende", NULL, width = "100%",
+                                                     placeholder = "Pas de titre de légende")
+                                    ))
+                                    
+                             ))
+                           
+                           
+                           
+                           
                          }
                          
         )
@@ -2399,6 +2617,25 @@ shinyApp(
       })
       
       
+      # Définition du titre de la légende
+      plot_titre_legend_reac <- reactive({
+        
+        validate(need(input$target_upload,''))
+        validate(need(input$var_plot2, ''))
+        
+        if (input$choix_plot == "barplot_eff_bi" | input$choix_plot == "barplot_freq_bi") {
+          
+          if (input$plot_titre_legende == "") {
+            input$var_plot2 
+          } else {
+            input$plot_titre_legende
+          }
+          
+        }
+        
+      })
+      
+      
       
       #############
       
@@ -2412,6 +2649,8 @@ shinyApp(
       # Noeud 2 : pondération
       # Noeud 3 : affichage des NA
       
+      
+      ## PLOT TO SAVE              ----
       plot_to_save <- reactive({
         validate(need(input$target_upload, ''))
         validate(need(input$var_plot1, ''))
@@ -3087,7 +3326,7 @@ shinyApp(
               
               p <- ggplot(p_bi_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
                 geom_bar(position="stack", stat="identity", width = input$width_bar) +
-                scale_fill_manual(values=palette_plot())+
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
                 scale_y_continuous(
                   limits = c(0,ceiling(max(p_bi_na$Total)/input$n_break) * input$n_break), # input$n_break
                   breaks = seq(0, ceiling(max(p_bi_na$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
@@ -3146,8 +3385,7 @@ shinyApp(
                     face = "italic",
                     size = 16
                   )
-                ) + 
-                guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+                ) 
               
               p
               
@@ -3182,7 +3420,7 @@ shinyApp(
               
               p <- ggplot(p_bi, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
                 geom_bar(position="stack", stat="identity", width = input$width_bar) +
-                scale_fill_manual(values=palette_plot())+
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
                 scale_y_continuous(
                   limits = c(0,ceiling(max(p_bi$Total)/input$n_break) * input$n_break), # input$n_break
                   breaks = seq(0, ceiling(max(p_bi$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
@@ -3241,8 +3479,7 @@ shinyApp(
                     face = "italic",
                     size = 16
                   )
-                ) + 
-                guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+                ) 
               
               p
               
@@ -3283,7 +3520,7 @@ shinyApp(
               
               p <- ggplot(p_bi_ponder_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
                 geom_bar(position="stack", stat="identity", width = input$width_bar) +
-                scale_fill_manual(values=palette_plot())+
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
                 scale_y_continuous(
                   limits = c(0,ceiling(max(p_bi_ponder_na$Total)/input$n_break) * input$n_break), # input$n_break
                   breaks = seq(0, ceiling(max(p_bi_ponder_na$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
@@ -3342,8 +3579,7 @@ shinyApp(
                     face = "italic",
                     size = 16
                   )
-                ) + 
-                guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+                )  # input$var_plot2
               
               p
               
@@ -3382,7 +3618,7 @@ shinyApp(
               
               p <- ggplot(p_bi_ponder, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
                 geom_bar(position="stack", stat="identity", width = input$width_bar) +
-                scale_fill_manual(values=palette_plot())+
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
                 scale_y_continuous(
                   limits = c(0,ceiling(max(p_bi_ponder$Total)/input$n_break) * input$n_break), # input$n_break
                   breaks = seq(0, ceiling(max(p_bi_ponder$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
@@ -3441,8 +3677,7 @@ shinyApp(
                     face = "italic",
                     size = 16
                   )
-                ) + 
-                guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+                ) 
               
               p
               
@@ -3487,7 +3722,7 @@ shinyApp(
               
               p <- ggplot(p_bi_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
                 geom_bar(position="fill", stat="identity", width = input$width_bar) +
-                scale_fill_manual(values=palette_plot())+
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
                 scale_y_continuous(
                   breaks = seq(0,1,input$n_break/100),
                   expand = c(0, 0), # The horizontal axis does not extend to either side
@@ -3535,8 +3770,7 @@ shinyApp(
                     face = "italic",
                     size = 16
                   )
-                ) + 
-                guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+                ) 
               
               p
               
@@ -3571,7 +3805,7 @@ shinyApp(
               
               p <- ggplot(p_bi, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
                 geom_bar(position="fill", stat="identity", width = input$width_bar) +
-                scale_fill_manual(values=palette_plot())+
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
                 scale_y_continuous(
                   breaks = seq(0,1,input$n_break/100),
                   expand = c(0, 0), # The horizontal axis does not extend to either side
@@ -3619,8 +3853,7 @@ shinyApp(
                     face = "italic",
                     size = 16
                   )
-                ) + 
-                guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+                ) 
               
               p
               
@@ -3661,7 +3894,7 @@ shinyApp(
               
               p <- ggplot(p_bi_ponder_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
                 geom_bar(position="fill", stat="identity", width = input$width_bar) +
-                scale_fill_manual(values=palette_plot())+
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
                 scale_y_continuous(
                   breaks = seq(0,1,input$n_break/100),
                   expand = c(0, 0), # The horizontal axis does not extend to either side
@@ -3698,7 +3931,7 @@ shinyApp(
                 coord_flip()+
                 labs(
                   title = plot_titre_reac(), # plot_titre_reac()
-                  subtitle = "Proportions"
+                  subtitle = "Proportions pondérées"
                 ) + 
                 theme(
                   plot.title = element_text(
@@ -3709,8 +3942,7 @@ shinyApp(
                     face = "italic",
                     size = 16
                   )
-                ) + 
-                guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+                ) 
               
               p
               
@@ -3748,7 +3980,7 @@ shinyApp(
               
               p <- ggplot(p_bi_ponder, aes(fill=Var2, y=Somme, x=ordre_moda_graph)) + 
                 geom_bar(position="fill", stat="identity", width = input$width_bar) +
-                scale_fill_manual(values=palette_plot())+
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
                 scale_y_continuous(
                   breaks = seq(0,1,input$n_break/100),
                   expand = c(0, 0), # The horizontal axis does not extend to either side
@@ -3785,7 +4017,7 @@ shinyApp(
                 coord_flip()+
                 labs(
                   title = plot_titre_reac(), # plot_titre_reac()
-                  subtitle = "Proportions"
+                  subtitle = "Proportions pondérées"
                 ) + 
                 theme(
                   plot.title = element_text(
@@ -3796,8 +4028,7 @@ shinyApp(
                     face = "italic",
                     size = 16
                   )
-                ) + 
-                guides(fill = guide_legend(title = input$var_plot2)) # input$var_plot2
+                ) 
               
               p
               
@@ -3810,10 +4041,1681 @@ shinyApp(
       })
       
       
+      ## PLOT TO SHOW              ----
       
-      output$reactiv_plot <- renderPlot({
-        plot_to_save()
+      
+      plot_to_show <- reactive({
+        validate(need(input$target_upload, ''))
+        validate(need(input$var_plot1, ''))
+        
+        if (input$choix_plot == "barplot_eff_uni"
+        ){
+          # Pondération
+          if (input$checkbox_ponder_plot == FALSE) {
+            # AVEC NA
+            if (input$checkbox_na_plot == TRUE) {
+              
+              p_uni_na <<- filter_data() %>% 
+                group_by(get(input$var_plot1)) %>% #input$var_plot1
+                summarise(Somme = n()) %>% 
+                rename(Var1 = 1) %>% 
+                mutate(Pct = Somme / sum(Somme)*100)%>% 
+                # Prise en compte des NAs
+                mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", levels(with(filter_data(), as.factor(get(input$var_plot1)))))) %>% 
+                mutate(Var1=factor(Var1, levels=Var1))
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_uni_na$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_uni_na$Var1, p_uni_na$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_uni_na$Var1, desc(p_uni_na$Somme))
+              }
+              
+              # Graphique
+              pi <- ggplot(p_uni_na, aes(x=ordre_moda_graph, y=Somme,
+                                         text = paste0(input$var_plot1," : ", Var1, "<br>", "Effectif : ", Somme))) +
+                geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+                geom_point( size=4, color=input$col) +
+                coord_flip()+
+                theme_bw() +
+                xlab("") + # input$col input$width_bar
+                
+                scale_y_continuous(
+                  limits = c(0,ceiling(max(p_uni_na$Somme)/input$n_break) * input$n_break),
+                  breaks = seq(0, ceiling(max(p_uni_na$Somme)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Bouger echelle
+                ) +
+                
+                scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+                  panel.grid.minor.x = element_blank(),
+                  panel.grid.major.y = element_line(color = "white", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "#202020"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_text( size = input$taille_axe/2),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                )  +
+                
+                labs(
+                  title = plot_titre_reac(), # input$plot_titre
+                  subtitle = "Effectifs"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    face = "italic",
+                    size = 16
+                  )
+                )
+              
+              
+              ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Effectifs"), side = "top"),
+                       yaxis = list(title = ""),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              
+              
+              
+              
+            }else{ # ELSE SANS NA
+              
+              p_uni <- filter_data() %>% 
+                group_by(get(input$var_plot1)) %>% #input$var_plot1
+                summarise(Somme = n()) %>% 
+                rename(Var1 = 1) %>% 
+                filter(is.na(Var1) == FALSE) %>% 
+                mutate(Pct = Somme / sum(Somme)*100) 
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_uni$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_uni$Var1, p_uni$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_uni$Var1, desc(p_uni$Somme))
+              }
+              
+              # Graphique
+              pi <- ggplot(p_uni, aes(x=ordre_moda_graph, y=Somme,
+                                      text = paste0(input$var_plot1," : ", Var1, "<br>", "Effectif : ", Somme))) +
+                geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+                geom_point( size=4, color=input$col) +
+                coord_flip()+
+                theme_bw() +
+                xlab("") + # input$col input$width_bar
+                
+                scale_y_continuous(
+                  limits = c(0,ceiling(max(p_uni$Somme)/input$n_break) * input$n_break),
+                  breaks = seq(0, ceiling(max(p_uni$Somme)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Bouger echelle
+                ) +
+                
+                scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+                  panel.grid.minor.x = element_blank(),
+                  panel.grid.major.y = element_line(color = "white", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "#202020"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_text( size = input$taille_axe/2),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                )  +
+                
+                labs(
+                  title = plot_titre_reac(), # input$plot_titre
+                  subtitle = "Effectifs"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    face = "italic",
+                    size = 16
+                  )
+                )
+              
+              # Interactif
+              ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Effectifs"), side = "top"),
+                       yaxis = list(title = ""),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              
+            }
+            
+          }else{ # ELSE AVEC PONDER
+            
+            validate(need(input$var_ponder_plot, 'Choisir une variable de pondération'))
+            
+            # AVEC NA
+            if (input$checkbox_na_plot == TRUE) {
+              
+              p_uni_ponder_na <- filter_data() %>% 
+                group_by(get(input$var_plot1)) %>% #input$var_plot1
+                summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
+                rename(Var1 = 1) %>% 
+                mutate(Pct = Somme / sum(Somme)*100)%>% 
+                # Prise en compte des NAs
+                mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", levels(with(filter_data(), as.factor(get(input$var_plot1))))))%>% 
+                mutate(Var1=factor(Var1, levels=Var1))
+              
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_uni_ponder_na$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_uni_ponder_na$Var1, p_uni_ponder_na$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_uni_ponder_na$Var1, desc(p_uni_ponder_na$Somme))
+              }
+              
+              
+              # Graphique
+              pi <- ggplot(p_uni_ponder_na, aes(x=ordre_moda_graph, y=Somme,
+                                                text = paste0(input$var_plot1," : ", Var1, "<br>", "Effectif : ", Somme))) +
+                geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+                geom_point( size=4, color=input$col) +
+                coord_flip()+
+                theme_bw() +
+                xlab("") + # input$col input$width_bar
+                
+                scale_y_continuous(
+                  limits = c(0,ceiling(max(p_uni_ponder_na$Somme)/input$n_break) * input$n_break),
+                  breaks = seq(0, ceiling(max(p_uni_ponder_na$Somme)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Bouger echelle
+                ) +
+                
+                scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+                  panel.grid.minor.x = element_blank(),
+                  panel.grid.major.y = element_line(color = "white", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "#202020"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_text( size = input$taille_axe/2),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                )  +
+                
+                labs(
+                  title = plot_titre_reac(), # input$plot_titre
+                  subtitle = "Effectifs pondérés"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    face = "italic",
+                    size = 16
+                  )
+                )
+              
+              # Interactif
+              ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Effectifs pondérés"), side = "top"),
+                       yaxis = list(title = ""),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              
+            }else{ # ELSE SANS NA
+              
+              
+              
+              p_uni_ponder <- filter_data() %>% 
+                group_by(get(input$var_plot1)) %>% #input$var_plot1
+                summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder
+                rename(Var1 = 1) %>% 
+                filter(is.na(Var1) == FALSE) %>% 
+                mutate(Pct = Somme / sum(Somme)*100)
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_uni_ponder$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_uni_ponder$Var1, p_uni_ponder$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_uni_ponder$Var1, desc(p_uni_ponder$Somme))
+              }
+              
+              
+              # Graphique
+              pi <- ggplot(p_uni_ponder, aes(x=ordre_moda_graph, y=Somme,
+                                             text = paste0(input$var_plot1," : ", Var1, "<br>", "Effectif : ", Somme))) +
+                geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+                geom_point( size=4, color=input$col) +
+                coord_flip()+
+                theme_bw() +
+                xlab("") + # input$col input$width_bar
+                
+                scale_y_continuous(
+                  limits = c(0,ceiling(max(p_uni_ponder$Somme)/input$n_break) * input$n_break),
+                  breaks = seq(0, ceiling(max(p_uni_ponder$Somme)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Bouger echelle
+                ) +
+                
+                scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+                  panel.grid.minor.x = element_blank(),
+                  panel.grid.major.y = element_line(color = "white", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "#202020"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_text( size = input$taille_axe/2),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                )  +
+                
+                labs(
+                  title = plot_titre_reac(), # input$plot_titre
+                  subtitle = "Effectifs pondérés"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    face = "italic",
+                    size = 16
+                  )
+                )
+              # Interactif
+              ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Effectifs pondérés"), side = "top"),
+                       yaxis = list(title = ""),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              
+            }
+          }
+        } else if(input$choix_plot == "barplot_freq_uni"
+        ){
+          # Pondération
+          if (input$checkbox_ponder_plot == FALSE) {
+            # AVEC NA
+            if (input$checkbox_na_plot == TRUE) {
+              
+              p_uni_na <<- filter_data() %>% 
+                group_by(get(input$var_plot1)) %>% #input$var_plot1
+                summarise(Somme = n()) %>% 
+                rename(Var1 = 1) %>% 
+                mutate(Pct = Somme / sum(Somme)*100)%>% 
+                # Prise en compte des NAs
+                mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", levels(with(filter_data(), as.factor(get(input$var_plot1)))))) %>% 
+                mutate(Var1=factor(Var1, levels=Var1))
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_uni_na$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_uni_na$Var1, p_uni_na$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_uni_na$Var1, desc(p_uni_na$Somme))
+              }
+              
+              # Graphique
+              pi <- ggplot(p_uni_na, aes(x=ordre_moda_graph, y=Pct,
+                                         text = paste0(input$var_plot1," : ", Var1, "<br>", "Fréquence : ", round(Pct,2)))) +
+                geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+                geom_point( size=4, color=input$col) +
+                coord_flip()+
+                theme_bw() +
+                xlab("") + # input$col input$width_bar
+                
+                scale_y_continuous(
+                  limits = c(0,ceiling(max(p_uni_na$Pct)/input$n_break) * input$n_break),
+                  breaks = seq(0, ceiling(max(p_uni_na$Pct)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Bouger echelle
+                ) +
+                
+                scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+                  panel.grid.minor.x = element_blank(),
+                  panel.grid.major.y = element_line(color = "white", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "#202020"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_text( size = input$taille_axe/2),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                )  +
+                
+                labs(
+                  title = plot_titre_reac(), # input$plot_titre
+                  subtitle = "Pourcentages"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    face = "italic",
+                    size = 16
+                  )
+                )
+              
+              # Interactif
+              ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Pourcentages"), side = "top"),
+                       yaxis = list(title = ""),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              
+              
+            }else{ # ELSE SANS NA
+              
+              p_uni <- filter_data() %>% 
+                group_by(get(input$var_plot1)) %>% #input$var_plot1
+                summarise(Somme = n()) %>% 
+                rename(Var1 = 1) %>% 
+                filter(is.na(Var1) == FALSE) %>% 
+                mutate(Pct = Somme / sum(Somme)*100)
+              
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_uni$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_uni$Var1, p_uni$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_uni$Var1, desc(p_uni$Somme))
+              }
+              
+              # Graphique
+              
+              # Graphique
+              pi <- ggplot(p_uni, aes(x=ordre_moda_graph, y=Pct,
+                                      text = paste0(input$var_plot1," : ", Var1, "<br>", "Fréquence : ", round(Pct,2)))) +
+                geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+                geom_point( size=4, color=input$col) +
+                coord_flip()+
+                theme_bw() +
+                xlab("") + # input$col input$width_bar
+                
+                scale_y_continuous(
+                  limits = c(0,ceiling(max(p_uni$Pct)/input$n_break) * input$n_break),
+                  breaks = seq(0, ceiling(max(p_uni$Pct)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Bouger echelle
+                ) +
+                
+                scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+                  panel.grid.minor.x = element_blank(),
+                  panel.grid.major.y = element_line(color = "white", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "#202020"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_text( size = input$taille_axe/2),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                )  +
+                
+                labs(
+                  title = plot_titre_reac(), # input$plot_titre
+                  subtitle = "Pourcentages"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    face = "italic",
+                    size = 16
+                  )
+                )
+              # Interactif
+              ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Pourcentages"), side = "top"),
+                       yaxis = list(title = ""),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              
+              
+            }
+            
+          }else{ # ELSE AVEC PONDER
+            
+            validate(need(input$var_ponder_plot, 'Choisir une variable de pondération'))
+            
+            # AVEC NA
+            if (input$checkbox_na_plot == TRUE) {
+              
+              p_uni_ponder_na <- filter_data() %>% 
+                group_by(get(input$var_plot1)) %>% #input$var_plot1
+                summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
+                rename(Var1 = 1) %>% 
+                mutate(Pct = Somme / sum(Somme)*100)%>% 
+                # Prise en compte des NAs
+                mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", levels(with(filter_data(), as.factor(get(input$var_plot1)))))) %>% 
+                mutate(Var1=factor(Var1, levels=Var1))
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_uni_ponder_na$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_uni_ponder_na$Var1, p_uni_ponder_na$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_uni_ponder_na$Var1, desc(p_uni_ponder_na$Somme))
+              }
+              
+              # Graphique
+              pi <- ggplot(p_uni_ponder_na, aes(x=ordre_moda_graph, y=Pct,
+                                                text = paste0(input$var_plot1," : ", Var1, "<br>", "Fréquence : ", round(Pct,2)))) +
+                geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+                geom_point( size=4, color=input$col) +
+                coord_flip()+
+                theme_bw() +
+                xlab("") + # input$col input$width_bar
+                
+                scale_y_continuous(
+                  limits = c(0,ceiling(max(p_uni_ponder_na$Pct)/input$n_break) * input$n_break),
+                  breaks = seq(0, ceiling(max(p_uni_ponder_na$Pct)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Bouger echelle
+                ) +
+                
+                scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+                  panel.grid.minor.x = element_blank(),
+                  panel.grid.major.y = element_line(color = "white", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "#202020"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_text( size = input$taille_axe/2),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                )  +
+                
+                labs(
+                  title = plot_titre_reac(), # input$plot_titre
+                  subtitle = "Pourcentages pondérés"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    face = "italic",
+                    size = 16
+                  )
+                )
+              # Interactif
+              ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Pourcentages pondérés"), side = "top"),
+                       yaxis = list(title = ""),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              
+            }else{ # ELSE SANS NA
+              
+              
+              
+              p_uni_ponder <- filter_data() %>% 
+                group_by(get(input$var_plot1)) %>% #input$var_plot1
+                summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder
+                rename(Var1 = 1) %>% 
+                filter(is.na(Var1) == FALSE) %>% 
+                mutate(Pct = Somme / sum(Somme)*100)
+              
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_uni_ponder$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_uni_ponder$Var1, p_uni_ponder$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_uni_ponder$Var1, desc(p_uni_ponder$Somme))
+              }
+              
+              # Graphique
+              pi <- ggplot(p_uni_ponder, aes(x=ordre_moda_graph, y=Pct,
+                                             text = paste0(input$var_plot1," : ", Var1, "<br>", "Fréquence : ", round(Pct,2)))) +
+                geom_segment( aes(xend=Var1, yend=0), color=input$col) +
+                geom_point( size=4, color=input$col) +
+                coord_flip()+
+                theme_bw() +
+                xlab("") + # input$col input$width_bar
+                
+                scale_y_continuous(
+                  limits = c(0,ceiling(max(p_uni_ponder$Pct)/input$n_break) * input$n_break),
+                  breaks = seq(0, ceiling(max(p_uni_ponder$Pct)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Bouger echelle
+                ) +
+                
+                scale_x_discrete(expand = expansion(add = c(0.5, 0.5))) +
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "lightgrey", size = 0.3),
+                  panel.grid.minor.x = element_blank(),
+                  panel.grid.major.y = element_line(color = "white", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "#202020"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_text( size = input$taille_axe/2),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                )  +
+                
+                labs(
+                  title = plot_titre_reac(), # input$plot_titre
+                  subtitle = "Pourcentages pondérés"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    face = "italic",
+                    size = 16
+                  )
+                )
+              # Interactif
+              ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Pourcentages pondérés"), side = "top"),
+                       yaxis = list(title = ""),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              
+            }
+          }
+          
+          
+          
+          
+          
+        } else if(input$choix_plot == "barplot_eff_bi"
+        ){
+          validate(need(input$var_plot2, 'Choisir une 2ème variable'))
+          # Pondération
+          if (input$checkbox_ponder_plot == FALSE) {
+            # AVEC NA
+            if (input$checkbox_na_plot == TRUE) {
+              
+              p_bi_na <<- filter_data() %>% 
+                group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+                summarise(Somme = n()) %>% 
+                rename(Var1 = 1) %>% 
+                rename(Var2 = 2) %>% 
+                group_by(Var1) %>%
+                mutate(Pct = Somme / sum(Somme)*100,
+                       Total = sum(Somme))%>% 
+                # Prise en compte des NAs
+                mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1),
+                       Var1 = as.factor(Var1),
+                       Var2 = as.factor(Var2))
+              
+              p_bi_na$Var2 <- factor(p_bi_na$Var2, levels = rev(levels(p_bi_na$Var2)))
+              
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_bi_na$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_bi_na$Var1, p_bi_na$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_bi_na$Var1, desc(p_bi_na$Somme))
+              }
+              
+              
+              
+              pi <- ggplot(p_bi_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                        text = paste(input$var_plot2,":", Var2, "<br>", "Effectif : ", Somme))) + 
+                geom_bar(position="stack", stat="identity", width = input$width_bar) +
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+                scale_y_continuous(
+                  limits = c(0,ceiling(max(p_bi_na$Total)/input$n_break) * input$n_break), # input$n_break
+                  breaks = seq(0, ceiling(max(p_bi_na$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Labels are located on the top after we pivot
+                )  +
+                # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+                #coord_flip()+
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "black"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_blank(),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                ) + 
+                
+                coord_flip()+
+                labs(
+                  title = plot_titre_reac(), # plot_titre_reac()
+                  subtitle = "Effectifs"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    #  family = "Econ Sans Cnd", 
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    #  family = "Econ Sans Cnd",
+                    face = "italic",
+                    size = 16
+                  )
+                ) 
+              
+              
+              # Interactif
+              pi <- ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Effectifs"), side = "top"),
+                       yaxis = list(title = ""),
+                       hoverlabel = list(font = list(size = 12)),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0)) 
+              
+              # Get the y positions of each category
+              y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+              
+              # Modify the annotations list to set hjust and y position for the labels
+              pi <- layout(pi, annotations = list(
+                x = input$n_break / 4,
+                y = y_pos,
+                text = levels(ordre_moda_graph),
+                #text = unique(p_bi_na$Var1),
+                #text = levels(p_bi_na$Var1),
+                showarrow = FALSE,
+                font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+                xref = "x",
+                yref = "y",
+                xanchor = "left",
+                yanchor = "middle",
+                hjust = -0.2
+              ))
+              
+              pi
+              
+              
+              
+            }else{ # ELSE SANS NA
+              
+              p_bi <- filter_data() %>% 
+                group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+                summarise(Somme = n()) %>% 
+                rename(Var1 = 1) %>% 
+                rename(Var2 = 2) %>% 
+                filter(is.na(Var1) == FALSE) %>% 
+                filter(is.na(Var2) == FALSE) %>% 
+                group_by(Var1) %>%
+                mutate(Pct = Somme / sum(Somme)*100,
+                       Total = sum(Somme),
+                       Var1 = as.factor(Var1),
+                       Var2 = as.factor(Var2))
+              
+              p_bi$Var2 <- factor(p_bi$Var2, levels = rev(levels(p_bi$Var2)))
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_bi$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_bi$Var1, p_bi$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_bi$Var1, desc(p_bi$Somme))
+              }
+              
+              pi <- ggplot(p_bi, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                     text = paste(input$var_plot2,":", Var2, "<br>", "Effectif : ", Somme))) + 
+                geom_bar(position="stack", stat="identity", width = input$width_bar) +
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+                scale_y_continuous(
+                  limits = c(0,ceiling(max(p_bi$Total)/input$n_break) * input$n_break), # input$n_break
+                  breaks = seq(0, ceiling(max(p_bi$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Labels are located on the top after we pivot
+                )  +
+                # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+                #coord_flip()+
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "black"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_blank(),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                ) + 
+                coord_flip()+
+                labs(
+                  title = plot_titre_reac(), # plot_titre_reac()
+                  subtitle = "Effectifs"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    #  family = "Econ Sans Cnd", 
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    #  family = "Econ Sans Cnd",
+                    face = "italic",
+                    size = 16
+                  )
+                ) 
+              
+              # Interactif
+              pi <- ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title =  paste0("\n","Effectifs"), side = "top"),
+                       yaxis = list(title = ""),
+                       hoverlabel = list(font = list(size = 12)),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              # Get the y positions of each category
+              y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+              
+              # Modify the annotations list to set hjust and y position for the labels
+              pi <- layout(pi, annotations = list(
+                x = input$n_break / 4,
+                y = y_pos,
+                text = levels(ordre_moda_graph),
+                #text = unique(p_bi_na$Var1),
+                #text = levels(p_bi_na$Var1),
+                showarrow = FALSE,
+                font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+                xref = "x",
+                yref = "y",
+                xanchor = "left",
+                yanchor = "middle",
+                hjust = -0.2
+              ))
+              
+              pi
+              
+              
+            }
+            
+          }else{ # ELSE AVEC PONDER
+            
+            validate(need(input$var_ponder_plot, 'Choisir une variable de pondération'))
+            
+            # AVEC NA
+            if (input$checkbox_na_plot == TRUE) {
+              
+              p_bi_ponder_na <- filter_data() %>% 
+                group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+                summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
+                rename(Var1 = 1) %>% 
+                rename(Var2 = 2) %>% 
+                group_by(Var1) %>%
+                mutate(Pct = Somme / sum(Somme)*100,
+                       Total = sum(Somme))%>% 
+                # Prise en compte des NAs
+                mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1),
+                       Var1 = as.factor(Var1),
+                       Var2 = as.factor(Var2)) 
+              
+              p_bi_ponder_na$Var2 <- factor(p_bi_ponder_na$Var2, levels = rev(levels(p_bi_ponder_na$Var2)))
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_bi_ponder_na$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_bi_ponder_na$Var1, p_bi_ponder_na$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_bi_ponder_na$Var1, desc(p_bi_ponder_na$Somme))
+              }
+              
+              pi <- ggplot(p_bi_ponder_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                               text = paste(input$var_plot2,":", Var2, "<br>", "Effectif : ", Somme))) + 
+                geom_bar(position="stack", stat="identity", width = input$width_bar) +
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+                scale_y_continuous(
+                  limits = c(0,ceiling(max(p_bi_ponder_na$Total)/input$n_break) * input$n_break), # input$n_break
+                  breaks = seq(0, ceiling(max(p_bi_ponder_na$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Labels are located on the top after we pivot
+                )  +
+                # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+                #coord_flip()+
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "black"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_blank(),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                ) + 
+                
+                coord_flip()+
+                labs(
+                  title = plot_titre_reac(), # plot_titre_reac()
+                  subtitle = "Effectifs pondérés"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    #  family = "Econ Sans Cnd", 
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    #  family = "Econ Sans Cnd",
+                    face = "italic",
+                    size = 16
+                  )
+                )  # input$var_plot2
+              
+              # Interactif
+              pi <- ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title =  paste0("\n","Effectifs pondérés"), side = "top"),
+                       yaxis = list(title = ""),
+                       hoverlabel = list(font = list(size = 12)),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              # Get the y positions of each category
+              y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+              
+              # Modify the annotations list to set hjust and y position for the labels
+              pi <- layout(pi, annotations = list(
+                x = input$n_break / 4,
+                y = y_pos,
+                text = levels(ordre_moda_graph),
+                #text = unique(p_bi_na$Var1),
+                #text = levels(p_bi_na$Var1),
+                showarrow = FALSE,
+                font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+                xref = "x",
+                yref = "y",
+                xanchor = "left",
+                yanchor = "middle",
+                hjust = -0.2
+              ))
+              
+              pi
+              
+              
+            }else{ # ELSE SANS NA
+              
+              
+              
+              p_bi_ponder <- filter_data() %>% 
+                group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+                summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
+                rename(Var1 = 1) %>% 
+                rename(Var2 = 2) %>% 
+                filter(is.na(Var1) == FALSE) %>% 
+                filter(is.na(Var2) == FALSE) %>% 
+                group_by(Var1) %>%
+                mutate(Pct = Somme / sum(Somme)*100,
+                       Total = sum(Somme)) %>% 
+                mutate(Var1 = as.factor(Var1),
+                       Var2 = as.factor(Var2))
+              
+              
+              p_bi_ponder$Var2 <- factor(p_bi_ponder$Var2, levels = rev(levels(p_bi_ponder$Var2)))
+              
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_bi_ponder$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_bi_ponder$Var1, p_bi_ponder$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_bi_ponder$Var1, desc(p_bi_ponder$Somme))
+              }
+              
+              
+              pi <- ggplot(p_bi_ponder, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                            text = paste(input$var_plot2,":", Var2, "<br>", "Effectif : ", Somme))) + 
+                geom_bar(position="stack", stat="identity", width = input$width_bar) +
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+                scale_y_continuous(
+                  limits = c(0,ceiling(max(p_bi_ponder$Total)/input$n_break) * input$n_break), # input$n_break
+                  breaks = seq(0, ceiling(max(p_bi_ponder$Total)/input$n_break) * input$n_break, by = input$n_break), # input$n_break
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Labels are located on the top after we pivot
+                )  +
+                # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+                #coord_flip()+
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "black"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_blank(),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                ) + 
+                
+                coord_flip()+
+                labs(
+                  title = plot_titre_reac(), # plot_titre_reac()
+                  subtitle = "Effectifs pondérés"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    #  family = "Econ Sans Cnd", 
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    #  family = "Econ Sans Cnd",
+                    face = "italic",
+                    size = 16
+                  )
+                ) 
+              
+              # Interactif
+              pi <- ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Effectifs pondérés"), side = "top"),
+                       yaxis = list(title = ""),
+                       hoverlabel = list(font = list(size = 12)),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              # Get the y positions of each category
+              y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+              
+              # Modify the annotations list to set hjust and y position for the labels
+              pi <- layout(pi, annotations = list(
+                x = input$n_break / 4,
+                y = y_pos,
+                text = levels(ordre_moda_graph),
+                #text = unique(p_bi_na$Var1),
+                #text = levels(p_bi_na$Var1),
+                showarrow = FALSE,
+                font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+                xref = "x",
+                yref = "y",
+                xanchor = "left",
+                yanchor = "middle",
+                hjust = -0.2
+              ))
+              
+              pi
+              
+              
+            }
+          }
+        } else if(input$choix_plot == "barplot_freq_bi"
+        ){
+          
+          validate(need(input$var_plot2, 'Choisir une 2ème variable'))
+          
+          # Pondération
+          if (input$checkbox_ponder_plot == FALSE) {
+            # AVEC NA
+            if (input$checkbox_na_plot == TRUE) {
+              
+              p_bi_na <<- filter_data() %>% 
+                group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+                summarise(Somme = n()) %>% 
+                rename(Var1 = 1) %>% 
+                rename(Var2 = 2) %>% 
+                group_by(Var1) %>%
+                mutate(Pct = Somme / sum(Somme)*100,
+                       Total = sum(Somme))%>% 
+                # Prise en compte des NAs
+                mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1),
+                       Var1 = as.factor(Var1),
+                       Var2 = as.factor(Var2))
+              
+              p_bi_na$Var2 <- factor(p_bi_na$Var2, levels = rev(levels(p_bi_na$Var2)))
+              
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_bi_na$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_bi_na$Var1, p_bi_na$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_bi_na$Var1, desc(p_bi_na$Somme))
+              }
+              
+              pi <- ggplot(p_bi_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                        text = paste(input$var_plot2,":", Var2, "<br>", "Fréquence : ", round(Pct,2)))) + 
+                geom_bar(position="fill", stat="identity", width = input$width_bar) +
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+                scale_y_continuous(
+                  breaks = seq(0,1,input$n_break/100),
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Labels are located on the top
+                )  +
+                # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+                #coord_flip()+
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "black"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_blank(),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                ) + 
+                
+                coord_flip()+
+                labs(
+                  title = plot_titre_reac(), # plot_titre_reac()
+                  subtitle = "Proportions"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    face = "italic",
+                    size = 16
+                  )
+                ) 
+              
+              # Interactif
+              pi <- ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Pourcentages"), side = "top"),
+                       yaxis = list(title = ""),
+                       hoverlabel = list(font = list(size = 12)),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              # Get the y positions of each category
+              y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+              
+              # Modify the annotations list to set hjust and y position for the labels
+              pi <- layout(pi, annotations = list(
+                x = input$n_break / 400,
+                y = y_pos,
+                text = levels(ordre_moda_graph),
+                #text = unique(p_bi_na$Var1),
+                #text = levels(p_bi_na$Var1),
+                showarrow = FALSE,
+                font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+                xref = "x",
+                yref = "y",
+                xanchor = "left",
+                yanchor = "middle",
+                hjust = -0.2
+              ))
+              
+              pi
+              
+              
+              
+            }else{ # ELSE SANS NA
+              
+              p_bi <- filter_data() %>% 
+                group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+                summarise(Somme = n()) %>% 
+                rename(Var1 = 1) %>% 
+                rename(Var2 = 2) %>% 
+                filter(is.na(Var1) == FALSE) %>% 
+                filter(is.na(Var2) == FALSE) %>% 
+                group_by(Var1) %>%
+                mutate(Pct = Somme / sum(Somme)*100,
+                       Total = sum(Somme),
+                       Var1 = as.factor(Var1),
+                       Var2 = as.factor(Var2))
+              
+              p_bi$Var2 <- factor(p_bi$Var2, levels = rev(levels(p_bi$Var2)))
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_bi$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_bi$Var1, p_bi$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_bi$Var1, desc(p_bi$Somme))
+              }
+              
+              pi <- ggplot(p_bi, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                     text = paste(input$var_plot2,":", Var2, "<br>", "Fréquence : ", round(Pct,2)))) + 
+                geom_bar(position="fill", stat="identity", width = input$width_bar) +
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+                scale_y_continuous(
+                  breaks = seq(0,1,input$n_break/100),
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Labels are located on the top
+                )  +
+                # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+                #coord_flip()+
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),            
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "black"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_blank(),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                ) + 
+                
+                coord_flip()+
+                labs(
+                  title = plot_titre_reac(), # plot_titre_reac()
+                  subtitle = "Proportions"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    face = "italic",
+                    size = 16
+                  )
+                ) 
+              
+              # Interactif
+              pi <- ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Pourcentages"), side = "top"),
+                       yaxis = list(title = ""),
+                       hoverlabel = list(font = list(size = 12)),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              # Get the y positions of each category
+              y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+              
+              # Modify the annotations list to set hjust and y position for the labels
+              pi <- layout(pi, annotations = list(
+                x = input$n_break / 400,
+                y = y_pos,
+                text = levels(ordre_moda_graph),
+                #text = unique(p_bi_na$Var1),
+                #text = levels(p_bi_na$Var1),
+                showarrow = FALSE,
+                font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+                xref = "x",
+                yref = "y",
+                xanchor = "left",
+                yanchor = "middle",
+                hjust = -0.2
+              ))
+              
+              pi
+              
+              
+            }
+            
+          }else{ # ELSE AVEC PONDER
+            
+            validate(need(input$var_ponder_plot, 'Choisir une variable de pondération'))
+            
+            # AVEC NA
+            if (input$checkbox_na_plot == TRUE) {
+              
+              p_bi_ponder_na <- filter_data() %>% 
+                group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+                summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
+                rename(Var1 = 1) %>% 
+                rename(Var2 = 2) %>% 
+                group_by(Var1) %>%
+                mutate(Pct = Somme / sum(Somme)*100,
+                       Total = sum(Somme))%>% 
+                # Prise en compte des NAs
+                mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1),
+                       Var1 = as.factor(Var1),
+                       Var2 = as.factor(Var2)) 
+              
+              p_bi_ponder_na$Var2 <- factor(p_bi_ponder_na$Var2, levels = rev(levels(p_bi_ponder_na$Var2)))
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_bi_ponder_na$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_bi_ponder_na$Var1, p_bi_ponder_na$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_bi_ponder_na$Var1, desc(p_bi_ponder_na$Somme))
+              }
+              
+              pi <- ggplot(p_bi_ponder_na, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                               text = paste(input$var_plot2,":", Var2, "<br>", "Fréquence : ", round(Pct,2)))) + 
+                geom_bar(position="fill", stat="identity", width = input$width_bar) +
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+                scale_y_continuous(
+                  breaks = seq(0,1,input$n_break/100),
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Labels are located on the top
+                )  +
+                # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+                #coord_flip()+
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),             
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "black"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_blank(),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                ) + 
+                
+                coord_flip()+
+                labs(
+                  title = plot_titre_reac(), # plot_titre_reac()
+                  subtitle = "Proportions pondérées"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    face = "italic",
+                    size = 16
+                  )
+                ) 
+              
+              # Interactif
+              pi <- ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Pourcentages pondérés"), side = "top"),
+                       yaxis = list(title = ""),
+                       hoverlabel = list(font = list(size = 12)),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              # Get the y positions of each category
+              y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+              
+              # Modify the annotations list to set hjust and y position for the labels
+              pi <- layout(pi, annotations = list(
+                x = input$n_break / 400,
+                y = y_pos,
+                text = levels(ordre_moda_graph),
+                #text = unique(p_bi_na$Var1),
+                #text = levels(p_bi_na$Var1),
+                showarrow = FALSE,
+                font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+                xref = "x",
+                yref = "y",
+                xanchor = "left",
+                yanchor = "middle",
+                hjust = -0.2
+              ))
+              
+              pi
+              
+              
+            }else{ # ELSE SANS NA
+              
+              
+              
+              p_bi_ponder <- filter_data() %>% 
+                group_by(get(input$var_plot1), get(input$var_plot2)) %>% #input$var_plot1 input$var_plot2
+                summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
+                rename(Var1 = 1) %>% 
+                rename(Var2 = 2) %>% 
+                filter(is.na(Var1) == FALSE) %>% 
+                filter(is.na(Var2) == FALSE) %>% 
+                group_by(Var1) %>%
+                mutate(Pct = Somme / sum(Somme)*100,
+                       Total = sum(Somme)) %>% 
+                mutate(Var1 = as.factor(Var1),
+                       Var2 = as.factor(Var2))
+              
+              
+              p_bi_ponder$Var2 <- factor(p_bi_ponder$Var2, levels = rev(levels(p_bi_ponder$Var2)))
+              
+              
+              # Ordre
+              ordre_moda_graph <- vector()
+              if (input$radio_ordre == "Normal") {
+                ordre_moda_graph <- p_bi_ponder$Var1
+              }else if (input$radio_ordre == "Croissant") {
+                ordre_moda_graph <- reorder(p_bi_ponder$Var1, p_bi_ponder$Somme)
+              }else if (input$radio_ordre == "Décroissant") {
+                ordre_moda_graph <- reorder(p_bi_ponder$Var1, desc(p_bi_ponder$Somme))
+              }
+              
+              pi <- ggplot(p_bi_ponder, aes(fill=Var2, y=Somme, x=ordre_moda_graph, 
+                                            text = paste(input$var_plot2,":", Var2, "<br>", "Fréquence : ", round(Pct,2)))) + 
+                geom_bar(position="fill", stat="identity", width = input$width_bar) +
+                scale_fill_manual(values=palette_plot(), name= plot_titre_legend_reac())+
+                scale_y_continuous(
+                  breaks = seq(0,1,input$n_break/100),
+                  expand = c(0, 0), # The horizontal axis does not extend to either side
+                  position = "right"  # Labels are located on the top
+                )  +
+                # scale_x_discrete(expand = expansion(add = c(0, 0.5))) +
+                #coord_flip()+
+                theme(
+                  # Set background color to white
+                  panel.background = element_rect(fill = "white"),    
+                  plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+                  # Set the color and the width of the grid lines for the horizontal axis
+                  panel.grid.major.x = element_line(color = "#A8BAC4", size = 0.3),
+                  # Remove tick marks by setting their length to 0
+                  axis.ticks.length = unit(0, "mm"),
+                  # Remove the title for both axes
+                  axis.title = element_blank(),
+                  # Only left line of the vertical axis is painted in black
+                  axis.line.y.left = element_line(color = "black"),
+                  # Remove labels from the vertical axis
+                  axis.text.y = element_blank(),
+                  # But customize labels for the horizontal axis
+                  axis.text.x = element_text( size = input$taille_axe/2) # input$taille_axe
+                ) + 
+                
+                coord_flip()+
+                labs(
+                  title = plot_titre_reac(), # plot_titre_reac()
+                  subtitle = "Proportions pondérées"
+                ) + 
+                theme(
+                  plot.title = element_text(
+                    face = "bold",
+                    size = 22
+                  ),
+                  plot.subtitle = element_text(
+                    face = "italic",
+                    size = 16
+                  )
+                ) 
+              
+              # Interactif
+              pi <- ggplotly(pi, tooltip = c("text"))%>% 
+                config(scrollZoom = FALSE, displayModeBar = FALSE, editable = FALSE) %>% 
+                layout(dragmode = "pan",
+                       title = plot_titre_reac(),
+                       xaxis = list(title = paste0("\n","Pourcentages pondérés"), side = "top"),
+                       yaxis = list(title = ""),
+                       hoverlabel = list(font = list(size = 12)),
+                       margin = list(l = 50, r = 150, b = 0, t = 100, pad = 0))
+              
+              # Get the y positions of each category
+              y_pos <- c(1:with(filter_data(),length(unique(get(input$var_plot1)))))
+              
+              # Modify the annotations list to set hjust and y position for the labels
+              pi <- layout(pi, annotations = list(
+                x = input$n_break / 400,
+                y = y_pos,
+                text = levels(ordre_moda_graph),
+                #text = unique(p_bi_na$Var1),
+                #text = levels(p_bi_na$Var1),
+                showarrow = FALSE,
+                font = list(size = input$taille_label*1.5, color = input$col_label), # Input !!!!
+                xref = "x",
+                yref = "y",
+                xanchor = "left",
+                yanchor = "middle",
+                hjust = -0.2
+              ))
+              
+              pi
+              
+              
+            }
+          }
+        }
+        
+        
       })
+      
+      
+      ## AFFICHAGE PLOT            ----
+      
+      # On affiche les graphiques interactifs avec plotly, mais on doit aussi afficher
+      # un graphique d'erreur quand le nombre de modalité dépasse le nombre de la palette
+      
+      
+      output$reactiv_plot <- renderPlotly({
+        validate(need(input$var_plot1, 'Choisir une variable'))
+        
+        if (input$choix_plot == "barplot_eff_uni" | input$choix_plot == "barplot_freq_uni") {
+          plot_to_show()
+        } else {
+          
+          validate(need(input$var_plot2, 'Choisir une deuxième variable'))
+          
+          if (input$choix_color == "Palette" &
+              length(unique(with(filter_data(), get(input$var_plot2)))) >
+              length(brewer.pal(n = length(unique(with(filter_data(), get(input$var_plot2)))), name = input$palette))) {
+            
+            message <- "ATTENTION : 
+La variable 2 a trop de modalités par rapport à la palette de couleur sélectionnée.
+    Vous pouvez sélectionner manuellement les couleurs à gauche."
+            
+            # Create a data frame with a single point
+            errordf <- data.frame(x = 0, y = 0)
+            # Create a ggplot2 plot with a single point, no axis or labels, and white background
+            errrorplot <- ggplot(errordf, aes(x, y)) +
+              geom_point(size = 0) +
+              theme(plot.background = element_rect(fill = "white", color = NA),
+                    panel.background = element_rect(fill = "white", color = NA),
+                    panel.grid.major = element_blank(),
+                    panel.grid.minor = element_blank(),
+                    axis.title = element_blank(),
+                    axis.text = element_blank(),
+                    axis.ticks = element_blank(),
+                    axis.line = element_blank())
+            
+            # Add text in the center of the plot
+            errrorplot <- errrorplot + 
+              annotate("text", x = 0, y = 0, label = message, color = "red", size = 4, vjust = 0.5, hjust = 0.5)
+            errrorplot
+            
+            # Convert the ggplot2 plot to a plotly object
+            errrorplot <- ggplotly(errrorplot, tooltip = "")
+            
+            # Set the opacity of the marker to 0 to make the point invisible
+            errrorplot$x$data[[1]]$marker$opacity <- 0
+            
+            # Display the interactive plot
+            errrorplot
+            
+            
+          } else {
+            plot_to_show()
+          }
+          
+        }
+        
+        
+      })
+      
+      
+      
       
       
       ## CREATION PALETTE COULEUR  ----
@@ -3846,156 +5748,37 @@ shinyApp(
       
       
       
-      ## CREATION LECTURE ----
-      
-      # Pour plus tard :
-      # Texte explicatif
-      
-      # output$reactiv_plot_lecture <- renderPlot({
-      #   plot_lecture()
-      # })
-      # 
-      # plot_lecture <- reactive({
-      #   validate(need(input$target_upload, ''))
-      #   validate(need(input$var_plot1, ''))
-      #   
-      #   
-      #   # SANS Pondération
-      #   if (input$checkbox_ponder_plot == FALSE) {
-      #     # AVEC NA
-      #     if (input$checkbox_na_plot == TRUE) {
-      #       
-      #       p_uni_na <<- filter_data() %>% 
-      #         group_by(get(input$var_plot1)) %>% #input$var_plot1
-      #         summarise(Somme = n()) %>% 
-      #         rename(Var1 = 1) %>% 
-      #         mutate(Pct = Somme / sum(Somme)*100)%>% 
-      #         # Prise en compte des NAs
-      #         mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1)) %>% 
-      #         arrange(desc(Somme))
-      #       
-      #       grid.text(
-      #         paste("Lecture :",round(p_uni_na[1,2],2),"individus ont répondu", p_uni_na[1,1], "à la variable", input$var_plot1), #input$var_plot1
-      #         x = 0.005,
-      #         y = 0.06,
-      #         just = c("left", "bottom"),
-      #         gp = gpar(
-      #           col = "grey50",
-      #           fontsize = 12,
-      #           fontface = "italic"
-      #         )
-      #       )
-      #       
-      #       
-      #       
-      #     }else{ # ELSE SANS NA
-      #       
-      #       p_uni <- filter_data() %>% 
-      #         group_by(get(input$var_plot1)) %>% #input$var_plot1
-      #         summarise(Somme = n()) %>% 
-      #         rename(Var1 = 1) %>% 
-      #         filter(is.na(Var1) == FALSE) %>% 
-      #         mutate(Pct = Somme / sum(Somme)*100)%>% 
-      #         # Prise en compte des NAs
-      #         arrange(desc(Somme))
-      #       
-      #       
-      #       grid.text(
-      #         paste("Lecture :",round(p_uni[1,2],2),"individus ont répondu", p_uni[1,1], "à la variable", input$var_plot1), #input$var_plot1
-      #         x = 0.005, 
-      #         y = 0.06, 
-      #         just = c("left", "bottom"),
-      #         gp = gpar(
-      #           col = "grey50",
-      #           fontsize = 12,
-      #           fontface = "italic"
-      #         )
-      #       )
-      #       
-      #       
-      #     }
-      #     
-      #   }else{ # ELSE AVEC PONDER
-      #     
-      #     validate(need(input$var_ponder_plot, 'Choisir une variable de pondération'))
-      #     
-      #     # AVEC NA
-      #     if (input$checkbox_na_plot == TRUE) {
-      #       
-      #       p_uni_ponder_na <- filter_data() %>% 
-      #         group_by(get(input$var_plot1)) %>% #input$var_plot1
-      #         summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
-      #         rename(Var1 = 1) %>% 
-      #         mutate(Pct = Somme / sum(Somme)*100)%>% 
-      #         # Prise en compte des NAs
-      #         mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1)) %>% 
-      #         arrange(desc(Somme))
-      #       
-      #       
-      #       grid.text(
-      #         paste("Lecture :",round(p_uni_ponder_na[1,2],2),"individus ont répondu", p_uni_ponder_na[1,1], "à la variable", input$var_plot1), #input$var_plot1
-      #         x = 0.005, 
-      #         y = 0.06, 
-      #         just = c("left", "bottom"),
-      #         gp = gpar(
-      #           col = "grey50",
-      #           fontsize = 10,
-      #           fontface = "italic"
-      #         )
-      #       )
-      #       
-      #       
-      #     }else{ # ELSE SANS NA
-      #       
-      #       
-      #       
-      #       p_uni_ponder <- filter_data() %>% 
-      #         group_by(get(input$var_plot1)) %>% #input$var_plot1
-      #         summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder
-      #         rename(Var1 = 1) %>% 
-      #         filter(is.na(Var1) == FALSE) %>% 
-      #         mutate(Pct = Somme / sum(Somme)*100)%>% 
-      #         # Prise en compte des NAs
-      #         arrange(desc(Somme))
-      #       
-      #       
-      #       grid.text(
-      #         paste("Lecture :",round(p_uni_ponder[1,2],2),"individus ont répondu", p_uni_ponder[1,1], "à la variable", input$var_plot1), #input$var_plot1
-      #         x = 0.005, 
-      #         y = 0.06, 
-      #         just = c("left", "bottom"),
-      #         gp = gpar(
-      #           col = "grey50",
-      #           fontsize = 10,
-      #           fontface = "italic"
-      #         )
-      #       )
-      #       
-      #       
-      #     }
-      #   }
-      #   
-      #   
-      #   
-      # })
-      # 
-      
-      
-      
-      
       #############
       
       #############
-      #### SAUVEGARDE ----
+      #### SAUVEGARDE                ----
       
+      # Sauvegarde en svg ou png
       
-      output$pngsave <- downloadHandler(
-        filename = function() { paste("Graphique-", Sys.Date(), '.png', sep='') },
+      output$label_sauvegarde <- renderText({ "Sauvegarder le graphique :"})
+      
+      output$plot_save <- downloadHandler(
+        filename = function() { paste("Graphique-", Sys.Date(), input$save_format, sep='')},
+        
         content = function(file) {
           png(file, width = 800)
           print(plot_to_save())
           dev.off()
+          
+          if(input$save_format == ".png") {
+            png(file, width = 800)
+            print(plot_to_save())
+            dev.off()
+          } else if (input$save_format == ".svg") {
+            svg(file)
+            print(plot_to_save())
+            dev.off()
+          }
+          
+          
+          
         })
+      
       
       
       

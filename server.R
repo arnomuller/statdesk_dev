@@ -78,7 +78,7 @@ server = shinyServer(
     # unique bloc de code.
     
     v <- reactiveValues(data = NULL)
-    
+    # Idem pour les noms de variables
     nomreac <- reactiveValues(nomcol = NULL)
     
     

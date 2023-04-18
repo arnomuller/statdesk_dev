@@ -95,7 +95,7 @@ options(dplyr.summarise.inform = FALSE)
 # - Sauvegarde avec rapport automatisés
 # - Lecture des tables/Graphe
 # - Bouton Chi² qui affiche la significativité, et une explication
-# - Variable Quanti
+# - Variable Quantitative
 
 
 

@@ -176,9 +176,7 @@ ui = shinyUI(
                  conditionalPanel(condition="input.recod_or_reord == 'Recoder'",
                                   # Choix de la variable à recoder
                                   uiOutput("choix_var_recod"),
-                                  
-                                  
-                                  
+                                  # Mise en forme du bouton GO en CSS
                                   tags$head(
                                     tags$style(
                                       HTML("
@@ -194,36 +192,30 @@ ui = shinyUI(
                                            ")
                                     )
                                   ),
-                                  
-                                  
+                                  # Bouton pour ouvrir l'interface de recodage
                                   fluidRow(column(4, align = "center", 
                                   actionButton("RecodeGO", "GO !", class = "btn-success"))),
-                                  
                                   br(),
-                                  # Affichage d'une table de la variable
+                                  # Affichage d'une table de la variable à recoder
                                   fluidRow(column(12, align = "center",
                                                   tableOutput("table_recod_avant"))),
-                                  
                                   br(),
                                   # Si une variable est sélectionnée, affichage de l'interface de recodage.
                                   conditionalPanel(condition = "input.var_recod != ''",
                                                    uiOutput("recodage")
                                   ),
-                                  
-                                  # Affichage de la table de la nouvelle variable
-                                  
+                                  # Affichage des tables de la variable recodée avant/après avec textes explicatifs
                                   conditionalPanel(condition = "input.var_recod == ''",
                                                    fluidRow(column(12, align = "center",
                                                                    textOutput("texte_table_avant"))),
                                                    fluidRow(column(12, align = "center",
                                                                    uiOutput("aff_table_avant2")))),
-                                  
                                   # Affichage de la table de la nouvelle variable
                                   conditionalPanel(condition = "input.var_recod == ''",
                                                    fluidRow(column(12, align = "center",
                                                                    textOutput("texte_table_apres"))),
-                                  fluidRow(column(12, align = "center",
-                                                  uiOutput("aff_table_apres"))))),
+                                                   fluidRow(column(12, align = "center",
+                                                                   uiOutput("aff_table_apres"))))),
                  
                  # Si on choisit réordonner
                  conditionalPanel(condition="input.recod_or_reord == 'Réordonner'",
@@ -315,7 +307,6 @@ ui = shinyUI(
                    column(2,
                           br(),
                           uiOutput("param_plot")),
-                   
                    column(10, align = "center",
                           br(),
                           # Choix du titre
@@ -326,8 +317,8 @@ ui = shinyUI(
                           br(),
                           # Sauvegarde
                           conditionalPanel(condition = "output.afficher_plot_sauvegarde == 'Oui'",
-                                           
                                            textOutput('label_sauvegarde'),
+                                           # Format du texte en CSS :
                                            tags$head(tags$style("#label_sauvegarde{
                                            color: #3175a8; 
                                            font-size: 12px;

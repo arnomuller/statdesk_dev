@@ -34,25 +34,24 @@ output$table_recod_avant <- renderTable({
 })
 
 
-
+# Création d'un reactiveValues qui permet de contrôler le fait d'appuyer sur les boutons
+# permet l'affichage et la disparition de table
 button_state <- reactiveValues(bttn = 0, valid = FALSE)
 
-# Update button state on click
+# Quand on clique prend valeur >= 1
 observeEvent(input$RecodeGO, {
   button_state$bttn <- button_state$bttn +1
 })
-
-# Observe changes in input$var and reset generate button state
+# Quand on change de variable se reset
 observeEvent(input$var_recod, {
   button_state$bttn <- 0
 })
+# Si 0 table s'efface, si 1 table s'affiche
 
+# Idem pour RecodeOK
 observeEvent(input$RecodeOK, {
   button_state$valid <- button_state$valid +1
 })
-
-
-
 
 
 # Cadre avec le nom de la variable à recoder
@@ -63,12 +62,6 @@ output$nom_var_recod_avant <- renderText({
   input$var_recod
   }
 })
-
-
-
-
-
-
 
 
 
@@ -209,34 +202,29 @@ output$reorder_ui <- renderUI({
 #### RECODAGE                       ----
 
 
-
-
-# Quand on appuye sur le bouton recodage
+# Quand on appuye sur le bouton recodage GO
 observeEvent(input$RecodeGO, {
-  
   validate(need(input$var_recod,''))
   
+  # On sauvegarde le nom de la variable choisi pour l'affichage de table même
+  # quand var_recod est reset
   var_recod <<- input$var_recod
 
-  # On crée une nouvelle variable basée sur l'input
+  # On crée une autre base et une nouvelle variable basée sur l'input
   recod_data <<- v$data  %>% 
     mutate(newvar = as.character(get(var_recod)))
-  
-  
-
   
 }) # Fin var_recod 
 
 
 
-
-
-
-
+# Quand on valide le recodage
 observeEvent(input$RecodeOK, {
   
+  # On procède au recodage
+  
+  # Recodage si NA : 
   if (anyNA(with(recod_data, get(var_recod))) == T) {
-    
     # Pour chaque modalité de la variable (-1 pour les NA)
     # On donne la valeur dans la case recodage si l'utilisateur à écrit dedans,
     # sinon on garde la valeur précédente.
@@ -268,26 +256,9 @@ observeEvent(input$RecodeOK, {
   } # Fin else
   
   
-  
-  # # On affiche une table de la variable recodée
-  # output$table_recod_apres <- renderTable({
-  #   tab <- as.data.frame(t(as.data.frame(with(recod_data, addmargins(table(get("newvar"), useNA = "always")))))) %>%
-  #     slice(2)
-  #   
-  #   colnames(tab) <- c(with(recod_data, names(table(get("newvar")))), "Non Réponse", "Total")
-  #   tab
-  # })
-  # # Affichage de la table recodée
-  # output$aff_table_apres <- renderUI({
-  #   tableOutput("table_recod_apres")
-  # })
-  # 
-  
-  
-  
+  ## GESTION DES NOMS DE VARIABLES
   old_name <- "newvar"
   new_name <<- var_recod_nom_apres()
-  
   
   # Si le nom existe déjà, la variable est automatiquement renommée avec le suffixe _new
   if (new_name %in% names(df) && new_name != old_name) {
@@ -298,62 +269,50 @@ observeEvent(input$RecodeOK, {
       footer = NULL))
   }
   
-  # Check if the new name is already in use in the data frame
+  # Vérification si le nouveau nom est déjà dans le dataframe
   i <- 1
   while (new_name %in% names(recod_data) && new_name != old_name) {
-    # If the new name is already in use, add an increasing number to the end of the name
+    # Si le nom est déjà présent on ajoute un numéro à la fin du nom
     i <- i + 1
     new_name <- paste0(new_name, i)
   }
-  
-  # Rename the variable with the unique new name
+  # Renommer les variables avec le nouveau nom
   names(recod_data)[names(recod_data) == old_name] <- new_name
-  
+  # Sauvegarde de la base pour être sur
   recod_data <<- recod_data
   
-  
-  
-  
-  
+  # Modification du fichier en entrée
   v$data <- recod_data
   nomreac$nomcol <- colnames(v$data)
   
   
   
   
-  # Table de cette variable
+  # Table de la variable selectionnee
+  # Info
+  output$texte_table_avant <- renderPrint({
+    cat("Variable à recoder: ", var_recod)
+  })
+  # Table
   output$table_recod_avant2 <- renderTable({
     hop <- as.data.frame(t(as.data.frame(with(v$data, addmargins(table(get(var_recod), useNA = "always")))))) %>% 
       slice(2)
     colnames(hop) <- c(with(v$data, names(table(get(var_recod)))), "Non Réponse", "Total")
     hop
-    
   })
-  
-  
-  
-  
-  # Info tables
-  output$texte_table_avant <- renderPrint({
-    cat("Variable à recoder: ", var_recod)
-  })
-  
   # Affichage de la table avant recod
   output$aff_table_avant2 <- renderUI({
-   # if (input$RecodeOK > 0 & input$var_recod == "") {
       tableOutput("table_recod_avant2")
-   # }
   })
   
   
   
-  
-  # Info tables
+  # Table de la variable nouvelle
+  # Info 
   output$texte_table_apres <- renderPrint({
     cat("Nouvelle variable: ", new_name)
   })
-  
-  # On affiche une table de la variable recodée
+  # Table
   output$table_recod_apres <- renderTable({
     tab <- as.data.frame(t(as.data.frame(with(v$data, addmargins(table(get(new_name), useNA = "always")))))) %>%
       slice(2)
@@ -361,21 +320,10 @@ observeEvent(input$RecodeOK, {
     colnames(tab) <- c(with(v$data, names(table(get(new_name)))), "Non Réponse", "Total")
     tab
   })
-  
   # Affichage de la table recodée
   output$aff_table_apres <- renderUI({
-   # if (input$RecodeOK > 0 & input$var_recod == "") {
     tableOutput("table_recod_apres")
-   # }
   })
-  
-  
-  
-  
-  
-  
-  
-
   
 })
 
@@ -393,19 +341,12 @@ observeEvent(input$ReorderOK, {
   
   validate(need(input$var_reord, ''))
   
-  # On sauvegarde le nouvelle ordre des modalités
-  # (pas forcément utile)
+  # On sauvegarde le nouvelle ordre des modalités (pas forcément utile)
   new_order <<- input$rank_list_basic
   
-  # Pas forcément utile
-  # reord_data <- v$data
-  # Changement de l'ordre de la variable
-  # reord_data[,input$var_reord] <- with(reord_data, factor(get(input$var_reord), levels = input$rank_list_basic))
-  # Sauvegarde de la nouvelle base et réécriture de l'ancienne
+  # On change l'ordre directement dans le fichier en entrée
   v$data[,input$var_reord] <- with(v$data, factor(get(input$var_reord), levels = input$rank_list_basic))
   
-  
-  # v$data <- reord_data
   
   # On affiche une table de la variable réordonnée
   output$table_reord_apres <- renderTable({

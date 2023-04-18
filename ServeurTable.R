@@ -1206,7 +1206,6 @@ observeEvent(input$var_table2, {
   validate(need(input$var_table2,""))
   if(dim(with(filter_data(), table(get(input$var_table2))))  >= 9 ){
     
-    #showNotification("This is a notification. 22222")
     showModal(modalDialog(
       title = "Nombre de modalités trop important",
       "La variable que vous avez sélectionné a trop de modalité pour être observée correctement dans une table. \n Vous pouvez la recoder dans l'onglet 'Variables'",
@@ -1220,9 +1219,8 @@ observeEvent(input$var_table2, {
 # Pour la variable 3, si plus de 5 modalités
 observeEvent(input$var_table3, {
   validate(need(input$var_table3,""))
-  if(dim(with(filter_data(), table(get(input$var_table3))))  >= 5 ){
+  if(dim(with(filter_data(), table(get(input$var_table3))))  >= 9 ){
     
-    #showNotification("This is a notification. 22222")
     showModal(modalDialog(
       title = "Nombre de modalités trop important",
       "La variable que vous avez sélectionné a trop de modalité pour être observée correctement dans une table. \n Vous pouvez la recoder dans l'onglet 'Variables'",

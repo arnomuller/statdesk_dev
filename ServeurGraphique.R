@@ -198,7 +198,7 @@ output$param_plot <- renderUI({
 
 
 
-## Choix du titre          ----
+## Choix des titres        ----
 
 output$label_titre <- renderText({ "Titre du graphique :"})
 output$label_titre_legende <- renderText({ "Titre de la légende :"})
@@ -214,21 +214,21 @@ output$param_titre <- renderUI({
                      fluidRow(
                        column(10,offset = 1,
                               
-                                # Titre Graphique
-                                fluidRow(column(3, align = "right",
-                                                textOutput('label_titre'),
-                                                tags$head(tags$style("#label_titre{
+                              # Titre Graphique
+                              fluidRow(column(3, align = "right",
+                                              textOutput('label_titre'),
+                                              tags$head(tags$style("#label_titre{
                                        color: #3175a8; 
                                        font-size: 12px;
                                        font-weight: bold ;
                                  }"))
-                                ),
-                                column(9, align = "left",
-                                       textInput("plot_titre", NULL, width = "100%",
-                                                 placeholder = paste0("Graphique de la variable ",
-                                                                      input$var_plot1))
-                                ))
-                               
+                              ),
+                              column(9, align = "left",
+                                     textInput("plot_titre", NULL, width = "100%",
+                                               placeholder = paste0("Graphique de la variable ",
+                                                                    input$var_plot1))
+                              ))
+                              
                        ))
                    }else{
                      
@@ -236,40 +236,40 @@ output$param_titre <- renderUI({
                      fluidRow(
                        column(10,offset = 1,
                               
-                                # Titre Graphique
-                                fluidRow(column(3, align = "right",
-                                                textOutput('label_titre'),
-                                                tags$head(tags$style("#label_titre{
+                              # Titre Graphique
+                              fluidRow(column(3, align = "right",
+                                              textOutput('label_titre'),
+                                              tags$head(tags$style("#label_titre{
                                        color: #3175a8; 
                                        font-size: 12px;
                                        font-weight: bold ;
                                  }"))
-                                ),
-                                column(9, align = "left",
-                                       textInput("plot_titre", NULL,  width = "100%",
-                                                 placeholder = paste0("Graphique empilé des variables ",
-                                                                      input$var_plot1, " et ", input$var_plot2 ))
-                                )),
-                                
-                                # Titre légende
-                                fluidRow(column(3, align = "right",
-                                                textOutput('label_titre_legende'),
-                                                tags$head(tags$style("#label_titre_legende{
+                              ),
+                              column(9, align = "left",
+                                     textInput("plot_titre", NULL,  width = "100%",
+                                               placeholder = paste0("Graphique empilé des variables ",
+                                                                    input$var_plot1, " et ", input$var_plot2 ))
+                              )),
+                              
+                              # Titre légende
+                              fluidRow(column(3, align = "right",
+                                              textOutput('label_titre_legende'),
+                                              tags$head(tags$style("#label_titre_legende{
                                        color: #3175a8; 
                                        font-size: 12px;
                                        font-weight: bold ;
                                  }"))
-                                ),
-                                column(4, align = "left",
-                                       textInput("plot_titre_legende", NULL, width = "100%",
-                                                 placeholder = "Pas de titre de légende")
-                                ))
-                                
+                              ),
+                              column(4, align = "left",
+                                     textInput("plot_titre_legende", NULL, width = "100%",
+                                               placeholder = "Pas de titre de légende")
+                              ))
+                              
                        ))
                      
                      
                      
-                    
+                     
                    }
                    
   )
@@ -304,13 +304,13 @@ plot_titre_legend_reac <- reactive({
   validate(need(input$var_plot2, ''))
   
   if (input$choix_plot == "barplot_eff_bi" | input$choix_plot == "barplot_freq_bi") {
-  
-  if (input$plot_titre_legende == "") {
+    
+    if (input$plot_titre_legende == "") {
       input$var_plot2 
     } else {
       input$plot_titre_legende
     }
-  
+    
   }
   
 })
@@ -3335,6 +3335,10 @@ plot_to_show <- reactive({
 
 ## AFFICHAGE PLOT            ----
 
+# On affiche les graphiques interactifs avec plotly, mais on doit aussi afficher
+# un graphique d'erreur quand le nombre de modalité dépasse le nombre de la palette
+
+
 output$reactiv_plot <- renderPlotly({
   validate(need(input$var_plot1, 'Choisir une variable'))
   
@@ -3381,14 +3385,6 @@ La variable 2 a trop de modalités par rapport à la palette de couleur sélecti
       errrorplot
       
       
-      
-      
-      # 
-      # plot.new()
-      # text(x = 0.5, y = 0.5, labels = message, col = "red")
-      # 
-      # 
-      
     } else {
       plot_to_show()
     }
@@ -3431,166 +3427,13 @@ palette_plot <- reactive({
 
 
 
-## CREATION LECTURE          ----
-
-# Pour plus tard :
-# Texte explicatif
-
-# output$reactiv_plot_lecture <- renderPlot({
-#   plot_lecture()
-# })
-# 
-# plot_lecture <- reactive({
-#   validate(need(input$target_upload, ''))
-#   validate(need(input$var_plot1, ''))
-#   
-#   
-#   # SANS Pondération
-#   if (input$checkbox_ponder_plot == FALSE) {
-#     # AVEC NA
-#     if (input$checkbox_na_plot == TRUE) {
-#       
-#       p_uni_na <<- filter_data() %>% 
-#         group_by(get(input$var_plot1)) %>% #input$var_plot1
-#         summarise(Somme = n()) %>% 
-#         rename(Var1 = 1) %>% 
-#         mutate(Pct = Somme / sum(Somme)*100)%>% 
-#         # Prise en compte des NAs
-#         mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1)) %>% 
-#         arrange(desc(Somme))
-#       
-#       grid.text(
-#         paste("Lecture :",round(p_uni_na[1,2],2),"individus ont répondu", p_uni_na[1,1], "à la variable", input$var_plot1), #input$var_plot1
-#         x = 0.005,
-#         y = 0.06,
-#         just = c("left", "bottom"),
-#         gp = gpar(
-#           col = "grey50",
-#           fontsize = 12,
-#           fontface = "italic"
-#         )
-#       )
-#       
-#       
-#       
-#     }else{ # ELSE SANS NA
-#       
-#       p_uni <- filter_data() %>% 
-#         group_by(get(input$var_plot1)) %>% #input$var_plot1
-#         summarise(Somme = n()) %>% 
-#         rename(Var1 = 1) %>% 
-#         filter(is.na(Var1) == FALSE) %>% 
-#         mutate(Pct = Somme / sum(Somme)*100)%>% 
-#         # Prise en compte des NAs
-#         arrange(desc(Somme))
-#       
-#       
-#       grid.text(
-#         paste("Lecture :",round(p_uni[1,2],2),"individus ont répondu", p_uni[1,1], "à la variable", input$var_plot1), #input$var_plot1
-#         x = 0.005, 
-#         y = 0.06, 
-#         just = c("left", "bottom"),
-#         gp = gpar(
-#           col = "grey50",
-#           fontsize = 12,
-#           fontface = "italic"
-#         )
-#       )
-#       
-#       
-#     }
-#     
-#   }else{ # ELSE AVEC PONDER
-#     
-#     validate(need(input$var_ponder_plot, 'Choisir une variable de pondération'))
-#     
-#     # AVEC NA
-#     if (input$checkbox_na_plot == TRUE) {
-#       
-#       p_uni_ponder_na <- filter_data() %>% 
-#         group_by(get(input$var_plot1)) %>% #input$var_plot1
-#         summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder_plot
-#         rename(Var1 = 1) %>% 
-#         mutate(Pct = Somme / sum(Somme)*100)%>% 
-#         # Prise en compte des NAs
-#         mutate(Var1 = ifelse(is.na(Var1), "Val.Manq", Var1)) %>% 
-#         arrange(desc(Somme))
-#       
-#       
-#       grid.text(
-#         paste("Lecture :",round(p_uni_ponder_na[1,2],2),"individus ont répondu", p_uni_ponder_na[1,1], "à la variable", input$var_plot1), #input$var_plot1
-#         x = 0.005, 
-#         y = 0.06, 
-#         just = c("left", "bottom"),
-#         gp = gpar(
-#           col = "grey50",
-#           fontsize = 10,
-#           fontface = "italic"
-#         )
-#       )
-#       
-#       
-#     }else{ # ELSE SANS NA
-#       
-#       
-#       
-#       p_uni_ponder <- filter_data() %>% 
-#         group_by(get(input$var_plot1)) %>% #input$var_plot1
-#         summarise(Somme = sum(as.numeric(get(input$var_ponder_plot)))) %>% #input$var_ponder
-#         rename(Var1 = 1) %>% 
-#         filter(is.na(Var1) == FALSE) %>% 
-#         mutate(Pct = Somme / sum(Somme)*100)%>% 
-#         # Prise en compte des NAs
-#         arrange(desc(Somme))
-#       
-#       
-#       grid.text(
-#         paste("Lecture :",round(p_uni_ponder[1,2],2),"individus ont répondu", p_uni_ponder[1,1], "à la variable", input$var_plot1), #input$var_plot1
-#         x = 0.005, 
-#         y = 0.06, 
-#         just = c("left", "bottom"),
-#         gp = gpar(
-#           col = "grey50",
-#           fontsize = 10,
-#           fontface = "italic"
-#         )
-#       )
-#       
-#       
-#     }
-#   }
-#   
-#   
-#   
-# })
-# 
-
-
-
 
 #############
 
 #############
-#### Warning trop de modalités ----
-
-# # Pour la variable 1, si plus de 9 modalités
-# observeEvent(input$var_plot2, {
-#   validate(need(input$var_plot2,""))
-#   if(length(unique(with(filter_data(), get(input$var_plot2))))  >= 8 ){
-#     
-#     # showNotification("This is a notification.")
-#     showModal(modalDialog(
-#       title = "Nombre de modalités important",
-#       "En cas d'erreurs : Changer dans les options du graphiques le type de palette de couleurs en 'manuelle'.",
-#       easyClose = TRUE,
-#       footer = NULL))
-#     
-#   }
-# })
-
-
 #### SAUVEGARDE                ----
 
+# Sauvegarde en svg ou png
 
 output$label_sauvegarde <- renderText({ "Sauvegarder le graphique :"})
 
